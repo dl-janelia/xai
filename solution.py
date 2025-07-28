@@ -683,6 +683,19 @@ for epoch in range(15):
         exponential_moving_average(generator_ema, generator)
     # Copy the EMA model's parameters to the generator
     copy_parameters(generator_ema, generator)
+    # Save the model
+    torch.save(
+        {
+            "generator": generator.state_dict(),
+            "discriminator": discriminator.state_dict(),
+            "generator_ema": generator_ema.state_dict(),
+            "optimizer_g": optimizer_g.state_dict(),
+            "optimizer_d": optimizer_d.state_dict(),
+            "epoch": epoch,
+            "losses": losses,
+        },
+        f"extras/checkpoints/stargan_epoch_{epoch}.pth",
+    )
 # %% tags=["solution"]
 from tqdm import tqdm  # This is a nice library for showing progress bars
 
@@ -741,6 +754,19 @@ for epoch in range(15):
         exponential_moving_average(generator, generator_ema)
     # Copy the EMA model's parameters to the generator
     copy_parameters(generator_ema, generator)
+    # Save the model
+    torch.save(
+        {
+            "generator": generator.state_dict(),
+            "discriminator": discriminator.state_dict(),
+            "generator_ema": generator_ema.state_dict(),
+            "optimizer_g": optimizer_g.state_dict(),
+            "optimizer_d": optimizer_d.state_dict(),
+            "epoch": epoch,
+            "losses": losses,
+        },
+        f"extras/checkpoints/stargan_epoch_{epoch}.pth",
+    )
 
 
 # %% [markdown] tags=[]
