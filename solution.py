@@ -897,7 +897,7 @@ plt.show()
 # %% [markdown] tags=[]
 # <div class="alert alert-block alert-warning"><h3>Questions</h3>
 # <ul>
-# <li> How well is our GAN doing at creating counterfactual images? </li>
+# <li> How well is our GAN creating counterfactual images? </li>
 # <li> Does your choice of prototypes matter? Why or why not? </li>
 # </ul>
 # </div>
@@ -984,11 +984,11 @@ for idx in range(batch_size):
 #
 # Here are two examples of image-counterfactual-attribution triplets.
 # You'll notice that they are *very* similar in every way! But one set is different classes, and one set is the same class!
-# 
+#
 # ![same_class](assets/same_class.png)
 # ![diff_class](assets/diff_class.png)
 #
-# We are missing a crucial step of the explanation pipeline: a quantification of how the class changes over the interpolation. 
+# We are missing a crucial step of the explanation pipeline: a quantification of how the class changes over the interpolation.
 #
 # In the lecture, we used the attribution to act as a mask, to gradually go from the original image to the counterfactual image.
 # This allowed us to classify all of the intermediate images, and learn how the class changed over the interpolation.
@@ -1165,7 +1165,6 @@ plt.show()
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 5</h2>
-# Congratulations! You have made it to the end of the exercise!
 # You have:
 # <ul>
 # <li> Created a StarGAN that can change the class of an image </li>
@@ -1177,8 +1176,59 @@ plt.show()
 #
 # If you have any questions, feel free to ask them in the chat!
 # And check the Solutions exercise for a definite answer to how these classes are defined!
+#
+# %% [markdown]
+# We did a lot of work to try to interpret what was going on in this dataset.
+# But, is this work always necessary?
+#
+# Sometimes, the data is in a format that is already amenable to interpretation, if we try a little bit harder than just looking at a few images.
+# Let's try using the exact same code we used on the style space, but directly on the images themselves.
 
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Bonus Task: Exploring the image space</h3>
+# Let's use PCA to visualize the images in the dataset, using the colors of the images themselves.
+# </div>
+# %%
+images = []
+for img, label in random_test_mnist:
+    images.append(img.cpu().detach().numpy().squeeze())
+images = np.array(images)
+
+pca = PCA(n_components=2)
+images_pca = pca.fit_transform(images.reshape(len(images), -1))
+
+# Plot the PCA
+markers = ["o", "s", "P", "^"]
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+for i in range(4):
+    ax1.scatter(
+        images_pca[np.array(labels) == i, 0],
+        images_pca[np.array(labels) == i, 1],
+        marker=markers[i],
+        label=f"Class {i}",
+    )
+    ax1.set_title("PCA of images, colored by class")
+    ax2.scatter(
+        images_pca[np.array(labels) == i, 0],
+        images_pca[np.array(labels) == i, 1],
+        c=colors[np.array(labels) == i],
+        marker=markers[i],
+        label=f"Class {i}",
+    )
+    ax2.set_title("PCA of images, colored by image color")
+plt.legend()
+plt.show()
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Questions</h3>
+# <ul>
+#   <li> Is this easier or harder to interpret than the style space? </li>
+#  <li> Can you think of something else to plot that would be even more interpretable? </li>
+# </ul>
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint 6</h2>
+# Congratulations! You have made it to the end of the exercise!
+#
 # # Bonus!
 # If you have extra time, you can try to break the StarGAN!
 # There are a lot of little things that we did to make sure that it runs correctly - but what if we didn't?
@@ -1226,3 +1276,5 @@ def plot_color_gradients(cmap_list):
 
 
 plot_color_gradients(["spring", "summer", "autumn", "winter"])
+
+# %%
