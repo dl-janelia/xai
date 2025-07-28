@@ -811,7 +811,7 @@ plt.show()
 # <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
 # You've now learned the basics of what makes up a StarGAN, and details on how to perform adversarial training.
 # The same method can be used to create a StarGAN with different basic elements.
-# For example, you can change the archictecture of the generators, or of the discriminator to better fit your data in the future.
+# For example, you can change the architecture of the generators, or of the discriminator to better fit your data in the future.
 #
 # You know the drill... put up your green sticky note when you have arrived here!
 # </div>
@@ -947,6 +947,19 @@ for i in np.random.choice(range(num_images), 4):
 # </ul>
 # </div>
 
+# %% [markdown] tags=[]
+# GANs are hard... if you've tried at least thrice, and it still doesn't work, you can use the following to cheat a tiny tiny bit :)
+# Just copy the code below to load a pre-trained model, and then try again.
+# ```python
+#    checkpoint = torch.load(
+#        "/mnt/efs/aimbl_2025/08_knowledge_extraction/it_just_works.pth", weights_only=False
+#    )
+#    generator.load_state_dict(checkpoint["generator"])
+#
+#   generator_ema = Generator(deepcopy(generator.unet), style_encoder=deepcopy(generator.style_encoder))
+#   generator_ema.to(device)
+#   generator.to(device)
+# ```
 # %% [markdown]
 # At this point we have:
 # - A classifier that can differentiate between image of different classes
