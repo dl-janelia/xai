@@ -119,7 +119,7 @@ plt.show()
 #
 # - Loaded a classifier that classifies MNIST-like images by color, but we don't know how!
 #
-# We will not stop her as a group, it's just the end of Part 1. So continue on with part 2 right away.
+# We will not stop here as a group, it's just the end of Part 1. So continue on with part 2 right away.
 # </div>
 # %% [markdown]
 # # Part 2: Using Integrated Gradients to find what the classifier knows
