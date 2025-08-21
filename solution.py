@@ -21,6 +21,7 @@
 # <div class="alert alert-danger">
 # Set your python kernel to <code>08_knowledge_extraction</code>
 # </div>
+
 # %% [markdown]
 #
 # # Part 1: Setup
@@ -96,13 +97,14 @@ model = model.to(device)
 from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
+from tqdm import tqdm  # This is a nice library for showing progress bars
 
 test_mnist = ColoredMNIST("extras/data", download=True, train=False)
 dataloader = DataLoader(test_mnist, batch_size=32, shuffle=False)
 
 labels = []
 predictions = []
-for x, y in dataloader:
+for x, y in tqdm(dataloader):
     pred = model(x.to(device))
     labels.extend(y.cpu().numpy())
     predictions.extend(pred.argmax(dim=1).cpu().numpy())
@@ -452,6 +454,7 @@ generator = Generator(unet, style_encoder=style_encoder)
 # %% tags=["solution"]
 # Here is an example of a working setup! Note that you can change the hyperparameters as you experiment.
 # Choose your own setup to see what works for you.
+style_size = 3
 style_encoder = DenseModel(input_shape=(3, 28, 28), num_classes=3)
 unet = UNet(depth=2, in_channels=6, out_channels=3, final_activation=nn.Sigmoid())
 generator = Generator(unet, style_encoder=style_encoder)
@@ -585,7 +588,6 @@ generator_ema = generator_ema.to(device)
 # %% [markdown] tags=[]
 # Once you're happy with your choices, run the training loop! &#x1F682; &#x1F68B; &#x1F68B; &#x1F68B;
 # %% tags=["task"]
-from tqdm import tqdm  # This is a nice library for showing progress bars
 
 
 losses = {"cycle": [], "adv": [], "disc": []}
@@ -697,9 +699,6 @@ for epoch in range(15):
         f"extras/checkpoints/stargan_epoch_{epoch}.pth",
     )
 # %% tags=["solution"]
-from tqdm import tqdm  # This is a nice library for showing progress bars
-
-
 losses = {"cycle": [], "adv": [], "disc": []}
 for epoch in range(15):
     for x, y in tqdm(dataloader, desc=f"Epoch {epoch}"):
