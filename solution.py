@@ -403,7 +403,6 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 # In the following, we create a [StarGAN model](https://arxiv.org/abs/1711.09020).
 # It is a Generative Adversarial model that is trained to turn one class of images X into a different class of images Y.
 #
-# We will not be using the random latent code (green, in the figure), so the model we use is made up of three networks:
 # - The generator - this will be the bulk of the model, and will be responsible for transforming the images: we're going to use a `UNet`
 # - The style encoder - this will be responsible for encoding the style of the image: we're going to use a `DenseModel`
 # - The discriminator - this will be responsible for telling the difference between real and fake images: we're going to use a `DenseModel`
