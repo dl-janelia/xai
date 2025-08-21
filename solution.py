@@ -408,6 +408,17 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 # - The discriminator - this will be responsible for telling the difference between real and fake images: we're going to use a `DenseModel`
 #
 # Let's start by creating these!
+# %% ["markdown"]
+# <div class="alert alert-block alert-info"><h3>Task 3.0: Set the seed</h3>
+# To make sure that your results are reproducible, set the seed to ... your birthday!
+# </div>
+# %% tags=["task"]
+# Set a seed for reproducibility
+torch.manual_seed(...)
+# %% tags=["solution"]
+# Set a seed for reproducibility
+import torch
+torch.manual_seed(19940816)
 # %%
 from dlmbl_unet import UNet
 from torch import nn
@@ -946,18 +957,7 @@ for i in np.random.choice(range(num_images), 4):
 # </div>
 
 # %% [markdown] tags=[]
-# GANs are hard... if you've tried at least thrice, and it still doesn't work, you can use the following to cheat a tiny tiny bit :)
-# Just copy the code below to load a pre-trained model, and then try again.
-# ```python
-#    checkpoint = torch.load(
-#        "/mnt/efs/aimbl_2025/08_knowledge_extraction/it_just_works.pth", weights_only=False
-#    )
-#    generator.load_state_dict(checkpoint["generator"])
-#
-#   generator_ema = Generator(deepcopy(generator.unet), style_encoder=deepcopy(generator.style_encoder))
-#   generator_ema.to(device)
-#   generator.to(device)
-# ```
+# GANs are hard... and yours might not have worked out. That's okay! Try changing your seed -- chat with your neighbors to see if you can find a good one, or ask a TA for the secret seed!
 # %% [markdown]
 # At this point we have:
 # - A classifier that can differentiate between image of different classes
@@ -1315,3 +1315,4 @@ def plot_color_gradients(cmap_list):
 plot_color_gradients(["spring", "summer", "autumn", "winter"])
 
 # %%
+
