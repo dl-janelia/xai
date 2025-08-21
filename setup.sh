@@ -10,9 +10,13 @@ else
     echo "Failed to activate environment for package installation. Dependencies not installed!"
     exit
 fi
+
+pip install uv
+uv pip install -r requirements.txt
+
+python -m ipykernel install --user --name "08_knowledge_extraction"
+
 echo "Training classifier model"
-conda install -y pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install -r requirements.txt
 python extras/train_classifier.py
 
 conda deactivate
