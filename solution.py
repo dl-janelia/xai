@@ -1,5 +1,5 @@
 # %% [markdown] tags=[]
-# # Exercise 8: Knowledge Extraction from a Pre-trained Neural Network
+# # Exercise 7: XAI 
 #
 # The goal of this exercise is to learn how to probe what a pre-trained classifier has learned about the data it was trained on.
 #
@@ -15,11 +15,12 @@
 # If time permits, we will try to apply this all over again as a bonus exercise to a much more complex and more biologically relevant problem.
 # ### Acknowledgments
 #
-# This notebook was written by Diane Adjavon, from a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
+# This notebook was written by Diane Adjavon, with input from Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix, and Ben Salmon. 
+# It was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
 #
 # %% [markdown]
 # <div class="alert alert-danger">
-# Set your python kernel to <code>08_knowledge_extraction</code>
+# Set your python kernel to <code>07_xai</code>
 # </div>
 
 # %% [markdown]

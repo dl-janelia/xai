@@ -19,10 +19,10 @@ Finally, we will combine the two methods — attribution and counterfactual — 
 
 ## Setup
 
-Before anything else, in the super-repository called `DL-MBL-2024`:
+Before anything else, in [the super-repository](https://github.com/ai-mbl/AI-MBL-2025) called `AI-MBL-2025`:
 ```
 git pull
-git submodule update --init 08_knowledge_extraction
+git submodule update --init 07_xai
 ```
 
 Then, if you have any other exercises still running, please save your progress and shut down those kernels.
@@ -30,7 +30,7 @@ This is a GPU-hungry exercise so you're going to need all the GPU memory you can
 
 Next, run the setup script. It might take a few minutes.
 ```
-cd 08_knowledge_extraction
+cd 07_xai
 bash setup.sh
 ```
 This will:
@@ -43,4 +43,5 @@ Next, open the exercise notebook!
 
 ### Acknowledgments
 
-This notebook was written by Diane Adjavon, from a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
+This notebook was written by Diane Adjavon, with input from Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix, and Ben Salmon. 
+It was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
