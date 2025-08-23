@@ -364,7 +364,7 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
-# Put up your green sticky note when you've reached this point!
+# Put up your sticky note when you've reached this point!
 #
 # At this point we have:
 #
@@ -409,17 +409,6 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 # - The discriminator - this will be responsible for telling the difference between real and fake images: we're going to use a `DenseModel`
 #
 # Let's start by creating these!
-# %% ["markdown"]
-# <div class="alert alert-block alert-info"><h3>Task 3.0: Set the seed</h3>
-# To make sure that your results are reproducible, set the seed to ... your birthday!
-# </div>
-# %% tags=["task"]
-# Set a seed for reproducibility
-torch.manual_seed(...)
-# %% tags=["solution"]
-# Set a seed for reproducibility
-import torch
-torch.manual_seed(19940816)
 # %%
 from dlmbl_unet import UNet
 from torch import nn
@@ -535,7 +524,7 @@ cycle_loss_fn = nn.L1Loss()
 from torch.utils.data import DataLoader
 
 dataloader = DataLoader(
-    mnist, batch_size=32, drop_last=True, shuffle=True
+    mnist, batch_size=32, drop_last=True, shuffle=True,
 )  # We will use the same dataset as before
 
 
@@ -823,12 +812,20 @@ plt.show()
 # The same method can be used to create a StarGAN with different basic elements.
 # For example, you can change the architecture of the generators, or of the discriminator to better fit your data in the future.
 #
-# You know the drill... put up your green sticky note when you have arrived here!
+# You know the drill... put up your sticky note when you have arrived here!
 # </div>
 
 # %% [markdown] tags=[]
 # # Part 4: Evaluating the GAN and creating Counterfactuals
 
+# %% [markdown] tags=[]
+# GANs are hard... and yours might not have worked out! If you've made it this far I hope you tried a few times 😉.  
+# If it *still* doesn't work, uncomment the two lines in the next cell to get a model that we pre-trained for you.
+
+# %% tags=[]
+# weights = torch.load("/mnt/efs/aimbl_2025/xai/stargan_checkpoint.pth")
+# generator.load_state_dict(weights["generator"])
+# generator_ema.load_state_dict(weights["generator_ema"])
 # %% [markdown] tags=[]
 # ## Creating counterfactuals
 #
@@ -957,8 +954,6 @@ for i in np.random.choice(range(num_images), 4):
 # </ul>
 # </div>
 
-# %% [markdown] tags=[]
-# GANs are hard... and yours might not have worked out. That's okay! Try changing your seed -- chat with your neighbors to see if you can find a good one, or ask a TA for the secret seed!
 # %% [markdown]
 # At this point we have:
 # - A classifier that can differentiate between image of different classes
