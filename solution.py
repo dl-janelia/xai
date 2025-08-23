@@ -1,5 +1,5 @@
 # %% [markdown] tags=[]
-# # Exercise 8: Knowledge Extraction from a Pre-trained Neural Network
+# # Exercise 7: XAI 
 #
 # The goal of this exercise is to learn how to probe what a pre-trained classifier has learned about the data it was trained on.
 #
@@ -15,12 +15,14 @@
 # If time permits, we will try to apply this all over again as a bonus exercise to a much more complex and more biologically relevant problem.
 # ### Acknowledgments
 #
-# This notebook was written by Diane Adjavon, from a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
+# This notebook was written by Diane Adjavon, with input from Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix, and Ben Salmon. 
+# It was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
 #
 # %% [markdown]
 # <div class="alert alert-danger">
-# Set your python kernel to <code>08_knowledge_extraction</code>
+# Set your python kernel to <code>07_xai</code>
 # </div>
+
 # %% [markdown]
 #
 # # Part 1: Setup
@@ -96,13 +98,14 @@ model = model.to(device)
 from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
+from tqdm import tqdm  # This is a nice library for showing progress bars
 
 test_mnist = ColoredMNIST("extras/data", download=True, train=False)
 dataloader = DataLoader(test_mnist, batch_size=32, shuffle=False)
 
 labels = []
 predictions = []
-for x, y in dataloader:
+for x, y in tqdm(dataloader):
     pred = model(x.to(device))
     labels.extend(y.cpu().numpy())
     predictions.extend(pred.argmax(dim=1).cpu().numpy())
@@ -119,7 +122,7 @@ plt.show()
 #
 # - Loaded a classifier that classifies MNIST-like images by color, but we don't know how!
 #
-# We will not stop her as a group, it's just the end of Part 1. So continue on with part 2 right away.
+# We will not stop here as a group, it's just the end of Part 1. So continue on with part 2 right away.
 # </div>
 # %% [markdown]
 # # Part 2: Using Integrated Gradients to find what the classifier knows
@@ -361,7 +364,7 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
-# Put up your green sticky note when you've reached this point!
+# Put up your sticky note when you've reached this point!
 #
 # At this point we have:
 #
@@ -401,7 +404,6 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
 # In the following, we create a [StarGAN model](https://arxiv.org/abs/1711.09020).
 # It is a Generative Adversarial model that is trained to turn one class of images X into a different class of images Y.
 #
-# We will not be using the random latent code (green, in the figure), so the model we use is made up of three networks:
 # - The generator - this will be the bulk of the model, and will be responsible for transforming the images: we're going to use a `UNet`
 # - The style encoder - this will be responsible for encoding the style of the image: we're going to use a `DenseModel`
 # - The discriminator - this will be responsible for telling the difference between real and fake images: we're going to use a `DenseModel`
@@ -452,6 +454,7 @@ generator = Generator(unet, style_encoder=style_encoder)
 # %% tags=["solution"]
 # Here is an example of a working setup! Note that you can change the hyperparameters as you experiment.
 # Choose your own setup to see what works for you.
+style_size = 3
 style_encoder = DenseModel(input_shape=(3, 28, 28), num_classes=3)
 unet = UNet(depth=2, in_channels=6, out_channels=3, final_activation=nn.Sigmoid())
 generator = Generator(unet, style_encoder=style_encoder)
@@ -521,7 +524,7 @@ cycle_loss_fn = nn.L1Loss()
 from torch.utils.data import DataLoader
 
 dataloader = DataLoader(
-    mnist, batch_size=32, drop_last=True, shuffle=True
+    mnist, batch_size=32, drop_last=True, shuffle=True,
 )  # We will use the same dataset as before
 
 
@@ -585,7 +588,6 @@ generator_ema = generator_ema.to(device)
 # %% [markdown] tags=[]
 # Once you're happy with your choices, run the training loop! &#x1F682; &#x1F68B; &#x1F68B; &#x1F68B;
 # %% tags=["task"]
-from tqdm import tqdm  # This is a nice library for showing progress bars
 
 
 losses = {"cycle": [], "adv": [], "disc": []}
@@ -683,10 +685,20 @@ for epoch in range(15):
         exponential_moving_average(generator_ema, generator)
     # Copy the EMA model's parameters to the generator
     copy_parameters(generator_ema, generator)
+    # Save the model
+    torch.save(
+        {
+            "generator": generator.state_dict(),
+            "discriminator": discriminator.state_dict(),
+            "generator_ema": generator_ema.state_dict(),
+            "optimizer_g": optimizer_g.state_dict(),
+            "optimizer_d": optimizer_d.state_dict(),
+            "epoch": epoch,
+            "losses": losses,
+        },
+        f"extras/checkpoints/stargan_epoch_{epoch}.pth",
+    )
 # %% tags=["solution"]
-from tqdm import tqdm  # This is a nice library for showing progress bars
-
-
 losses = {"cycle": [], "adv": [], "disc": []}
 for epoch in range(15):
     for x, y in tqdm(dataloader, desc=f"Epoch {epoch}"):
@@ -741,6 +753,19 @@ for epoch in range(15):
         exponential_moving_average(generator, generator_ema)
     # Copy the EMA model's parameters to the generator
     copy_parameters(generator_ema, generator)
+    # Save the model
+    torch.save(
+        {
+            "generator": generator.state_dict(),
+            "discriminator": discriminator.state_dict(),
+            "generator_ema": generator_ema.state_dict(),
+            "optimizer_g": optimizer_g.state_dict(),
+            "optimizer_d": optimizer_d.state_dict(),
+            "epoch": epoch,
+            "losses": losses,
+        },
+        f"extras/checkpoints/stargan_epoch_{epoch}.pth",
+    )
 
 
 # %% [markdown] tags=[]
@@ -785,14 +810,22 @@ plt.show()
 # <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
 # You've now learned the basics of what makes up a StarGAN, and details on how to perform adversarial training.
 # The same method can be used to create a StarGAN with different basic elements.
-# For example, you can change the archictecture of the generators, or of the discriminator to better fit your data in the future.
+# For example, you can change the architecture of the generators, or of the discriminator to better fit your data in the future.
 #
-# You know the drill... put up your green sticky note when you have arrived here!
+# You know the drill... put up your sticky note when you have arrived here!
 # </div>
 
 # %% [markdown] tags=[]
 # # Part 4: Evaluating the GAN and creating Counterfactuals
 
+# %% [markdown] tags=[]
+# GANs are hard... and yours might not have worked out! If you've made it this far I hope you tried a few times 😉.  
+# If it *still* doesn't work, uncomment the two lines in the next cell to get a model that we pre-trained for you.
+
+# %% tags=[]
+# weights = torch.load("/mnt/efs/aimbl_2025/xai/stargan_checkpoint.pth")
+# generator.load_state_dict(weights["generator"])
+# generator_ema.load_state_dict(weights["generator_ema"])
 # %% [markdown] tags=[]
 # ## Creating counterfactuals
 #
@@ -897,7 +930,7 @@ plt.show()
 # %% [markdown] tags=[]
 # <div class="alert alert-block alert-warning"><h3>Questions</h3>
 # <ul>
-# <li> How well is our GAN doing at creating counterfactual images? </li>
+# <li> How well is our GAN creating counterfactual images? </li>
 # <li> Does your choice of prototypes matter? Why or why not? </li>
 # </ul>
 # </div>
@@ -984,11 +1017,11 @@ for idx in range(batch_size):
 #
 # Here are two examples of image-counterfactual-attribution triplets.
 # You'll notice that they are *very* similar in every way! But one set is different classes, and one set is the same class!
-# 
+#
 # ![same_class](assets/same_class.png)
 # ![diff_class](assets/diff_class.png)
 #
-# We are missing a crucial step of the explanation pipeline: a quantification of how the class changes over the interpolation. 
+# We are missing a crucial step of the explanation pipeline: a quantification of how the class changes over the interpolation.
 #
 # In the lecture, we used the attribution to act as a mask, to gradually go from the original image to the counterfactual image.
 # This allowed us to classify all of the intermediate images, and learn how the class changed over the interpolation.
@@ -1165,7 +1198,6 @@ plt.show()
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 5</h2>
-# Congratulations! You have made it to the end of the exercise!
 # You have:
 # <ul>
 # <li> Created a StarGAN that can change the class of an image </li>
@@ -1177,8 +1209,59 @@ plt.show()
 #
 # If you have any questions, feel free to ask them in the chat!
 # And check the Solutions exercise for a definite answer to how these classes are defined!
+#
+# %% [markdown]
+# We did a lot of work to try to interpret what was going on in this dataset.
+# But, is this work always necessary?
+#
+# Sometimes, the data is in a format that is already amenable to interpretation, if we try a little bit harder than just looking at a few images.
+# Let's try using the exact same code we used on the style space, but directly on the images themselves.
 
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Bonus Task: Exploring the image space</h3>
+# Let's use PCA to visualize the images in the dataset, using the colors of the images themselves.
+# </div>
+# %%
+images = []
+for img, label in random_test_mnist:
+    images.append(img.cpu().detach().numpy().squeeze())
+images = np.array(images)
+
+pca = PCA(n_components=2)
+images_pca = pca.fit_transform(images.reshape(len(images), -1))
+
+# Plot the PCA
+markers = ["o", "s", "P", "^"]
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+for i in range(4):
+    ax1.scatter(
+        images_pca[np.array(labels) == i, 0],
+        images_pca[np.array(labels) == i, 1],
+        marker=markers[i],
+        label=f"Class {i}",
+    )
+    ax1.set_title("PCA of images, colored by class")
+    ax2.scatter(
+        images_pca[np.array(labels) == i, 0],
+        images_pca[np.array(labels) == i, 1],
+        c=colors[np.array(labels) == i],
+        marker=markers[i],
+        label=f"Class {i}",
+    )
+    ax2.set_title("PCA of images, colored by image color")
+plt.legend()
+plt.show()
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Questions</h3>
+# <ul>
+#   <li> Is this easier or harder to interpret than the style space? </li>
+#  <li> Can you think of something else to plot that would be even more interpretable? </li>
+# </ul>
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint 6</h2>
+# Congratulations! You have made it to the end of the exercise!
+#
 # # Bonus!
 # If you have extra time, you can try to break the StarGAN!
 # There are a lot of little things that we did to make sure that it runs correctly - but what if we didn't?
@@ -1226,3 +1309,6 @@ def plot_color_gradients(cmap_list):
 
 
 plot_color_gradients(["spring", "summer", "autumn", "winter"])
+
+# %%
+

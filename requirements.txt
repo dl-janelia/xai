@@ -1,3 +1,5 @@
+torch
+torchvision
 git+https://github.com/adjavon/classification.git
 ipykernel
 tqdm
