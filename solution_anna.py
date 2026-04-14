@@ -65,7 +65,7 @@
 #
 # ## Part A.4: General set-up
 # In this part of the notebook, we will load the same dataset as in the previous exercise.
-# ### Part A.4.1: Dataset: MNIST
+# ### Part A.4.1: The MNIST dataset
 # As a reminder, MNIST is benchmark datasets in machine learning, consisting of 70,000 grayscale images of handwritten digits
 # from 0 to 9, split into 60,000 for training and 10,000 for testing, where each image has a resolution of 28x28 pixels.
 # It is a great dataset to introduce representation learning because it is simple enough to train quickly,
@@ -74,15 +74,21 @@
 #
 # Documentation for this pytorch dataset is available at https://pytorch.org/vision/main/generated/torchvision.datasets.MNIST.html
 #
-# Let's get started and load our dataset
+# Let's get started and load our dataset, transforming the images into torch tensors and normalising them.
 # %%
 import torchvision
-
 transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor(), torchvision.transforms.Normalize((0.1307,), (0.3081,))])
 train_mnist = torchvision.datasets.MNIST("./mnist", train=True, download=False, transform=transform)
 test_mnist = torchvision.datasets.MNIST("./mnist", train=False, download=False, transform=transform)
 
-# Now, we will plot some examples of our dataset
+# %% [markdown]
+# <div class="alert alert-info">
+#     <b>Note:</b> set the <code>download</code> argument of <code>torchvision.datasets.MNIST</code> to <code>True</code> or <code>False</code> as required when re-running the notebook. When <code>./mnist</code> does not yet exist (on first run), make sure the first call to <code>torchvision.datasets.MNIST</code> has <code>download</code> set to <code>True</code>.
+# </div>
+
+# %% [markdown]
+# Let's take a look at a few loaded samples:
+
 # %%
 import matplotlib.pyplot as plt
 
@@ -94,16 +100,39 @@ for i, ax in enumerate(axs.flatten()):
     ax.imshow(x)
     ax.set_title(f"Class {y}")
     ax.axis("off")
+# %% [markdown]
+# Now, from the loaded datasets (both the train and test splits), we derive the dataloaders. We use dataloaders as they provide additional load-time features. Specifically, a dataloader enables iterating over the dataset in batches, and it also provides shuffling if desired. Here, we set the `batch_size` for both the train and test loader, and set `shuffle` for training only.
 
-# ## Part A.5: Autoencoders
-# Encoder -> bottleneck -> decoder
-# ### Part A.5.1: MLP class for encoder and decoder
+# %%
+from torch.utils.data import DataLoader
+train_loader = DataLoader(train_mnist, batch_size=8, shuffle=True)
+test_loader = DataLoader(test_mnist, batch_size=8, shuffle=False)
+
+# %% [markdown]
+# Have a look at the shape of what the dataset iterator and the dataloader iterator differ:
+
+# %%
+smpl, lbl = next(iter(train_mnist))
+print(f"dataset element shape: {smpl.shape} (class: {lbl})")
+smpl, lbl = next(iter(train_loader))
+print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
+
+# %% [markdown]
+# We note that dataloader elements come 8 at a time, with an extra "batch" dimension set to 8 as the first dimension in the tensor (and the labels being provided in a tensor of size 8 as opposed to a single value like in the dataset case). Also note that, both in the dataset and in the dataloader case, the data is not presented as a simple 2d 28x28 image, but rather as a 1x28x28 3d piece of data. This is useful when using multichannel data, but in our case, this extra dimension is superfluous. Keep this in mind when we use the data in the model for training, at which point we will explicitly drop this extra channel dimension.
+
+# %% [markdown]
+# ### Part A.5: Autoencoders
+# Now, let's present the model we will use to train. An autoencoder is an machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size. The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, effectively performing non-linear dimensionality reduction. In our case, we convert `28 * 28 = 784` pixel images into a few core features only via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
+#
+# #### Part A.5.1: An MLP class for encoder and decoder
+# For this exercise, we chose a simple MLP (multi-layer perceptron) as the architecture to back both the encoder and the decoder. MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU) to learn. Here, we default to a single layer.
+
 # %%
 import torch.nn as nn
 
 class MLP(nn.Module):
     def __init__( self, input_dim, output_dim
-                , hidden_dims=[], activation=nn.ReLU(), final_activation=False ):
+                , hidden_dims=[], activation=nn.ReLU(), final_activation=True ):
         super().__init__()
         dims = [input_dim] + hidden_dims
         layers = []
@@ -117,7 +146,11 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 # %% [markdown]
-# ### Part A.5.2: AutoEncoder class
+# #### Part A.5.2: The AutoEncoder class
+#
+# Here we provide a simple AutoEncoder class making use of our previously defined MLP class for both its encoder and decoder. Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
+#
+# The decoder consumes a latent feature vector and uses an MLP to reconstruct the original sample, reshaping as appropriate.
 # %%
 class AutoEncoder(nn.Module):
     def __init__( self, data_dim, latent_dim
@@ -145,27 +178,34 @@ class AutoEncoder(nn.Module):
         return xx.reshape(b, c, h, w), z
 # %% [markdown]
 # ### Part A.5.3: The loss function
-# MSE "reconstruction" loss
+# To train, we compute a Mean Squared Error "reconstruction" loss
 # %%
 loss = nn.MSELoss()
 # %% [markdown]
 # ### Part A.5.4: Training
-# #### Part A.5.4.1: Model instance, optimizer and dataloader
+# Now we get to create and train our model on the MNIST dataset.
+#
+# #### Part A.5.4.1: Model instance and optimizer
+#
+# We first create an instance of our AutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate size, and chose a latent dimension size as well (here, we compress by 10 the total size of the image).
 # %%
-
 data_sample, _ = next(iter(train_mnist))
-c, w, h = data_sample.shape
-
+_, w, h = data_sample.shape
 model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)
 
-from torch.optim import Adam
-optimizer = Adam(model.parameters(), lr=0.001)
-
-from torch.utils.data import DataLoader
-train_loader = DataLoader(train_mnist, batch_size=4, shuffle=True)
-test_loader = DataLoader(test_mnist, batch_size=4, shuffle=False)
 # %% [markdown]
-# #### Part A.5.4.2: training loop
+# We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
+
+# %%
+from torch.optim import Adam
+optimizer = Adam(model.parameters(), lr=0.0001)
+
+
+# %% [markdown]
+# #### Part A.5.4.2: The training "loop"
+# To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction, observe how close to the original data the reconstruction is using a loss function, and use that observation to inform the model optimisation. Performing these steps going once through all the training data is what is referred to as a training "epoch". We then loop this process over for a desired arbitrary number of training epochs.
+#
+# Below is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs. Note the `epoch_losses` list which will accumulate the average epoch losses as training occurs. We will use it to visualise the loss later.
 # %%
 def train_epoch(model, loader, optimizer, loss):
     model.train()
@@ -178,24 +218,34 @@ def train_epoch(model, loader, optimizer, loss):
         optimizer.step()
         # Stats
         running_loss += l.item()
+        #print(f"running loss: {running_loss:.4f}, instant loss: {l.item()}, loader len: {len(loader)}")
     # average loss for epoch
     return running_loss / len(loader)
 
-# --- Usage in your main loop ---
 epoch_losses = []
+
+from tqdm import tqdm
+from itertools import islice
 
 def train_epochs(n, model, loader, optimizer, loss):
     for epoch in range(n):
-        from tqdm import tqdm
-        from itertools import islice
-        avg_loss = train_epoch(model, tqdm(islice(train_loader, 20), total = 20), optimizer, loss)
+        # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
+        fresh_loader_iter = iter(loader)
+        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100)
+        avg_loss = train_epoch(model, sliced_loader, optimizer, loss)
         epoch_losses.append(avg_loss)
         tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
 
-train_epochs(1, model, train_loader, optimizer, loss)
+
 # %% [markdown]
-# ### Part A.5.5: Test
-# #### Part A.5.5.1: visualise input and reconstruction
+# We can now train the model. Let's do this for one epoch.
+
+# %%
+train_epochs(1, model, train_loader, optimizer, loss)
+
+
+# %% [markdown]
+# Now let's look at what reconstructions look like at this stage. Below are a couple simple visualisation function to display original and reconstructed images together, and to query the model for a batch of reconstructions and display them using the first function.
 
 # %%
 def show_recon(og, recon):
@@ -221,8 +271,7 @@ def show_recon(og, recon):
 
     plt.show()
 
-
-# %%
+import torch
 def view_test_sample(model, loader):
     model.eval()
     with torch.no_grad():
@@ -231,21 +280,32 @@ def view_test_sample(model, loader):
     show_recon(images, recon)
 
 
+# %% [markdown]
+# Let's call this on our model as it currently stands.
+
 # %%
 view_test_sample(model, test_loader)
 
+# %% [markdown]
+# Not the most beautiful sight just yet... Let's train some more...
+
 # %%
-# train 10 epochs and check
-train_epochs(10, model, train_loader, optimizer, loss)
+train_epochs(5, model, train_loader, optimizer, loss)
 view_test_sample(model, test_loader)
 
+# %% [markdown]
+# A little more...
+
 # %%
-# train 10 more epochs and check
-train_epochs(10, model, train_loader, optimizer, loss)
+train_epochs(50, model, train_loader, optimizer, loss)
 view_test_sample(model, test_loader)
 
+# %% [markdown]
+# Not bad :) Let's have a look at that loss.
+# Below is a simple function to plot it from the list we have accumulated in `epoch_losses` as we've trained.
 
 # %%
+import numpy as np
 def plot_loss(losses):
     plt.figure(figsize=(8, 5))
     plt.plot(losses, label='Training Loss', color='blue', marker='o', markersize=4)
@@ -257,12 +317,20 @@ def plot_loss(losses):
     plt.legend()
 
     # Ensure x-axis shows integer epoch numbers
-    plt.xticks(range(len(losses)))
+    #plt.xticks(range(len(losses)))
+    plt.xticks(np.arange(0, len(losses) + 1, 10))
 
     plt.show()
 
 plot_loss(epoch_losses)
 
+
+# %% [markdown]
+# We can clearly see it dropping as the training epochs happen and the model's parameters get optimised.
+
+# %% [markdown]
+# ### Part A.5.5: Test
+# #### Part A.5.5.1: visualise input and reconstruction
 
 # %%
 def get_latent_features(model, loader):
