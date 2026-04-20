@@ -198,6 +198,8 @@ class MLP(nn.Module):
 #
 # The decoder consumes a latent feature vector and uses an MLP to reconstruct the original sample, reshaping as appropriate.
 # %%
+import torch
+
 class AutoEncoder(nn.Module):
     def __init__( self, data_dim, latent_dim
                 , enc_hidden_dims=[], enc_activation=nn.ReLU(), enc_final_activation=False
@@ -226,7 +228,7 @@ class AutoEncoder(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         xx = self.decode(z)
-        return xx.reshape(b, c, h, w), z
+        return xx.reshape(b, c, h, w), z, mu, logvar
     
     @staticmethod
     def reparameterize(mean, logvar):
@@ -238,7 +240,14 @@ class AutoEncoder(nn.Module):
 # ### Part A.5.3: The loss function
 # To train, we compute a Mean Squared Error "reconstruction" loss
 # %%
-loss = nn.MSELoss()
+rec_loss = nn.MSELoss()
+
+def kl_loss(mu, logvar):
+    # sum over latent dimensions, mean over batch
+    return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
+
+def loss(rec, kl, beta = 0.001):
+    return rec + beta * kl
 # %% [markdown]
 # ### Part A.5.4: Training
 # Now we get to create and train our model on the MNIST dataset.
@@ -251,15 +260,32 @@ data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
 model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)
 
-# %%
-28*28//20
-
 # %% [markdown]
 # We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
 
 # %%
 from torch.optim import Adam
 optimizer = Adam(model.parameters(), lr=0.0001)
+
+# %%
+
+model.train()
+running_loss = 0.0
+for x, _ in train_loader:
+    xx, _, mu, logvar= model(x)
+    rec_l = rec_loss(x, xx)
+    kl_l = kl_loss(mu, logvar)
+    l = loss(rec_l, kl_l)
+    optimizer.zero_grad()
+    l.backward()
+    optimizer.step()
+    # Stats
+    running_loss += l.item()
+
+# %%
+#logvar[0]
+mu.shape
+#-0.5 * torch.sum(mu + logvar - mu**2 - logvar.exp(), dim=1)
 
 
 # %% [markdown]
@@ -270,19 +296,30 @@ optimizer = Adam(model.parameters(), lr=0.0001)
 # %%
 def train_epoch(model, loader, optimizer, loss):
     model.train()
+    running_rec_loss = 0.0
+    running_kl_loss = 0.0
     running_loss = 0.0
     for x, _ in loader:
-        xx, _ = model(x)
-        l = loss(x, xx)
+        xx, _, mu, logvar= model(x)
+        rec_l = rec_loss(x, xx)
+        kl_l = kl_loss(mu, logvar)
+        l = loss(rec_l, kl_l)
         optimizer.zero_grad()
         l.backward()
         optimizer.step()
         # Stats
+        running_rec_loss += rec_l.item()
+        running_kl_loss += kl_l.item()
         running_loss += l.item()
         #print(f"running loss: {running_loss:.4f}, instant loss: {l.item()}, loader len: {len(loader)}")
     # average loss for epoch
-    return running_loss / len(loader)
+    avg_rec_loss = running_rec_loss / len(loader)
+    avg_kl_loss = running_kl_loss / len(loader)
+    avg_loss = running_loss / len(loader)
+    return avg_rec_loss, avg_kl_loss, avg_loss
 
+epoch_rec_losses = []
+epoch_kl_losses = []
 epoch_losses = []
 
 from tqdm import tqdm
@@ -293,7 +330,9 @@ def train_epochs(n, model, loader, optimizer, loss):
         # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
         fresh_loader_iter = iter(loader)
         sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100)
-        avg_loss = train_epoch(model, sliced_loader, optimizer, loss)
+        avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss)
+        epoch_rec_losses.append(avg_rec_loss)
+        epoch_kl_losses.append(avg_kl_loss)
         epoch_losses.append(avg_loss)
         tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
 
@@ -332,12 +371,12 @@ def show_recon(og, recon):
 
     plt.show()
 
-import torch
+#import torch
 def view_test_sample(model, loader):
     model.eval()
     with torch.no_grad():
         images, _ = next(iter(loader))
-        recon, _ = model(images)
+        recon, _, _, _ = model(images)
     show_recon(images, recon)
 
 
@@ -367,23 +406,44 @@ view_test_sample(model, test_loader)
 
 # %%
 import numpy as np
-def plot_loss(losses):
-    plt.figure(figsize=(8, 5))
-    plt.plot(losses, label='Training Loss', color='blue', marker='o', markersize=4)
+def plot_loss(epoch_losses, epoch_rec_losses, epoch_rec_losses):
+    fig, axes = plt.subplots(1, 3, figsize=(8, 5))
+    axes[0].plot(epoch_losses, label='Total Loss', color='blue', marker='o', markersize=4)
+    axes[0].title("Training Loss Curve")
+    axes[0].xlabel("Epoch")
+    axes[0].ylabel("Loss")
+    axes[0].grid(True, linestyle='--', alpha=0.6)
+    axes[0].legend()
 
-    plt.title("Training Loss Curve")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend()
+
+    axes[1].plot(epoch_rec_losses, label='Reconstruction Loss', color='blue', marker='o', markersize=4)
+    axes[1].title("Training Loss Curve")
+    axes[1].xlabel("Epoch")
+    axes[1].ylabel("Reconstruction loss")
+    axes[1].grid(True, linestyle='--', alpha=0.6)
+    axes[1].legend()
+
+    axes[2].plot(epoch_rec_losses, label='Reconstruction Loss', color='blue', marker='o', markersize=4)
+    axes[2].title("Training Loss Curve")
+    axes[2].xlabel("Epoch")
+    axes[2].ylabel("Reconstruction loss")
+    axes[2].grid(True, linestyle='--', alpha=0.6)
+    axes[2].legend()
 
     # Ensure x-axis shows integer epoch numbers
     #plt.xticks(range(len(losses)))
-    plt.xticks(np.arange(0, len(losses) + 1, 10))
+    axes[0].xticks(np.arange(0, len(losses) + 1, 10))
 
     plt.show()
 
-plot_loss(epoch_losses)
+
+epoch_rec_losses = []
+epoch_kl_losses = []
+epoch_losses = []
+
+
+
+plot_loss(epoch_losses, epoch_rec_losses, epoch_rec_losses)
 
 
 # %% [markdown]
