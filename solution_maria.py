@@ -267,26 +267,6 @@ model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)
 from torch.optim import Adam
 optimizer = Adam(model.parameters(), lr=0.0001)
 
-# %%
-
-model.train()
-running_loss = 0.0
-for x, _ in train_loader:
-    xx, _, mu, logvar= model(x)
-    rec_l = rec_loss(x, xx)
-    kl_l = kl_loss(mu, logvar)
-    l = loss(rec_l, kl_l)
-    optimizer.zero_grad()
-    l.backward()
-    optimizer.step()
-    # Stats
-    running_loss += l.item()
-
-# %%
-#logvar[0]
-mu.shape
-#-0.5 * torch.sum(mu + logvar - mu**2 - logvar.exp(), dim=1)
-
 
 # %% [markdown]
 # #### Part A.5.4.2: The training "loop"
@@ -294,7 +274,7 @@ mu.shape
 #
 # Below is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs. Note the `epoch_losses` list which will accumulate the average epoch losses as training occurs. We will use it to visualise the loss later.
 # %%
-def train_epoch(model, loader, optimizer, loss):
+def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     model.train()
     running_rec_loss = 0.0
     running_kl_loss = 0.0
@@ -303,7 +283,7 @@ def train_epoch(model, loader, optimizer, loss):
         xx, _, mu, logvar= model(x)
         rec_l = rec_loss(x, xx)
         kl_l = kl_loss(mu, logvar)
-        l = loss(rec_l, kl_l)
+        l = loss(rec_l, kl_l, beta = beta)
         optimizer.zero_grad()
         l.backward()
         optimizer.step()
@@ -322,26 +302,35 @@ epoch_rec_losses = []
 epoch_kl_losses = []
 epoch_losses = []
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from itertools import islice
 
-def train_epochs(n, model, loader, optimizer, loss):
-    for epoch in range(n):
+def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
+    for epoch in tqdm(range(n)):
         # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
         fresh_loader_iter = iter(loader)
-        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100)
-        avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss)
+        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True) # set disabled=False for batch-loading bar
+        avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss, beta = beta)
         epoch_rec_losses.append(avg_rec_loss)
         epoch_kl_losses.append(avg_kl_loss)
         epoch_losses.append(avg_loss)
         tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
 
 
+# %%
+def reset_model():
+    model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)  # fresh weights
+    optimizer = Adam(model.parameters(), lr=0.0001)         # fresh optimizer
+    epoch_rec_losses, epoch_kl_losses, epoch_losses = [], [], []  # fresh history
+    return model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses
+
+
 # %% [markdown]
 # We can now train the model. Let's do this for one epoch.
 
 # %%
-train_epochs(1, model, train_loader, optimizer, loss)
+# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
+train_epochs(1, model, train_loader, optimizer, loss, beta = 0)
 
 
 # %% [markdown]
@@ -390,14 +379,16 @@ view_test_sample(model, test_loader)
 # Not the most beautiful sight just yet... Let's train some more...
 
 # %%
-train_epochs(5, model, train_loader, optimizer, loss)
+# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
+train_epochs(5, model, train_loader, optimizer, loss, beta = 0)
 view_test_sample(model, test_loader)
 
 # %% [markdown]
 # A little more...
 
 # %%
-train_epochs(50, model, train_loader, optimizer, loss)
+# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
+train_epochs(4000, model, train_loader, optimizer, loss, beta = 0.01)
 view_test_sample(model, test_loader)
 
 # %% [markdown]
@@ -406,44 +397,42 @@ view_test_sample(model, test_loader)
 
 # %%
 import numpy as np
-def plot_loss(epoch_losses, epoch_rec_losses, epoch_rec_losses):
-    fig, axes = plt.subplots(1, 3, figsize=(8, 5))
+def plot_loss(epoch_losses, epoch_rec_losses, epoch_kl_losses):
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     axes[0].plot(epoch_losses, label='Total Loss', color='blue', marker='o', markersize=4)
-    axes[0].title("Training Loss Curve")
-    axes[0].xlabel("Epoch")
-    axes[0].ylabel("Loss")
+    axes[0].set_title("Training Loss Curve")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Loss")
     axes[0].grid(True, linestyle='--', alpha=0.6)
     axes[0].legend()
 
 
     axes[1].plot(epoch_rec_losses, label='Reconstruction Loss', color='blue', marker='o', markersize=4)
-    axes[1].title("Training Loss Curve")
-    axes[1].xlabel("Epoch")
-    axes[1].ylabel("Reconstruction loss")
+    axes[1].set_title("Training Rec Loss Curve")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylabel("Reconstruction loss")
     axes[1].grid(True, linestyle='--', alpha=0.6)
     axes[1].legend()
 
-    axes[2].plot(epoch_rec_losses, label='Reconstruction Loss', color='blue', marker='o', markersize=4)
-    axes[2].title("Training Loss Curve")
-    axes[2].xlabel("Epoch")
-    axes[2].ylabel("Reconstruction loss")
+    axes[2].plot(epoch_kl_losses, label='KL Loss', color='blue', marker='o', markersize=4)
+    axes[2].set_title("Training KL Loss Curve")
+    axes[2].set_xlabel("Epoch")
+    axes[2].set_ylabel("KL loss")
     axes[2].grid(True, linestyle='--', alpha=0.6)
     axes[2].legend()
 
     # Ensure x-axis shows integer epoch numbers
     #plt.xticks(range(len(losses)))
-    axes[0].xticks(np.arange(0, len(losses) + 1, 10))
+    # axes[0].xticks(np.arange(0, len(losses) + 1, 10))
 
+    plt.tight_layout()
     plt.show()
 
 
-epoch_rec_losses = []
-epoch_kl_losses = []
-epoch_losses = []
 
 
-
-plot_loss(epoch_losses, epoch_rec_losses, epoch_rec_losses)
+plot_loss(epoch_losses, epoch_rec_losses, epoch_kl_losses)
 
 
 # %% [markdown]
@@ -461,8 +450,8 @@ def get_latent_features(model, loader):
 
     with torch.no_grad():
         for x, lbl in loader:
-            z = model.encode(x)
-            latents.append(z)
+            mu, logvar = model.encode(x)
+            latents.append(mu.cpu())
             labels.append(lbl)
     return torch.cat(latents, dim=0), torch.cat(labels, dim=0)
 
@@ -489,8 +478,24 @@ def plot_tsne( latents, labels
 
 
 # %%
-zs, lbls = get_latent_features(model, tqdm(test_loader))
-plot_tsne(zs, lbls)
+mus, lbls = get_latent_features(model, tqdm(test_loader))
+plot_tsne(mus, lbls)
+
+# %%
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+# Fit a logistic regression on the latent space
+clf = LogisticRegression(max_iter=1000)
+clf.fit(mus.numpy(), lbls.numpy())
+
+# Predict and compute accuracy
+preds = clf.predict(mus.numpy())
+accuracy = accuracy_score(lbls.numpy(), preds)
+print(f"Accuracy: {accuracy:.4f}")
+
+# %%
+np.unique(lbls == preds, return_counts=True)
 
 # %% [markdown]
 # ## Part A.6: Contrastive learning
