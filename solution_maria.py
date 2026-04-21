@@ -201,11 +201,14 @@ class MLP(nn.Module):
 import torch
 
 class AutoEncoder(nn.Module):
-    def __init__( self, data_dim, latent_dim
+    def __init__( self, w, h, latent_dim
                 , enc_hidden_dims=[], enc_activation=nn.ReLU(), enc_final_activation=False
                 , dec_hidden_dims=[], dec_activation=nn.ReLU(), dec_final_activation=False
                 ):
         super().__init__()
+        self.w = w
+        self.h = h
+        data_dim = w * h
         self.encoder = MLP( data_dim, latent_dim
                           , hidden_dims=enc_hidden_dims
                           , activation=enc_activation
@@ -221,14 +224,15 @@ class AutoEncoder(nn.Module):
         return mu, logvar
     
     def decode(self, z):
-        return self.decoder(z)
+        out = self.decoder(z)
+        return out.reshape(-1, 1, self.w, self.h) # this is hard-coding one channel 
     
     def forward(self, x):
         b, c, h, w = x.shape
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         xx = self.decode(z)
-        return xx.reshape(b, c, h, w), z, mu, logvar
+        return xx, z, mu, logvar
     
     @staticmethod
     def reparameterize(mean, logvar):
@@ -258,7 +262,7 @@ def loss(rec, kl, beta = 0.001):
 # %%
 data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
-model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)
+model = AutoEncoder(w, h, latent_dim=w*h//10)
 
 # %% [markdown]
 # We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
@@ -280,7 +284,7 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_kl_loss = 0.0
     running_loss = 0.0
     for x, _ in loader:
-        xx, _, mu, logvar= model(x)
+        xx, _, mu, logvar = model(x)
         rec_l = rec_loss(x, xx)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
@@ -319,7 +323,7 @@ def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
 
 # %%
 def reset_model():
-    model = AutoEncoder(data_dim=w*h, latent_dim=w*h//10)  # fresh weights
+    model = AutoEncoder(w, h, latent_dim=w*h//10)  # fresh weights
     optimizer = Adam(model.parameters(), lr=0.0001)         # fresh optimizer
     epoch_rec_losses, epoch_kl_losses, epoch_losses = [], [], []  # fresh history
     return model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses
@@ -387,9 +391,19 @@ view_test_sample(model, test_loader)
 # A little more...
 
 # %%
-# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(4000, model, train_loader, optimizer, loss, beta = 0.01)
+model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
+train_epochs(50, model, train_loader, optimizer, loss, beta = 0.001)
 view_test_sample(model, test_loader)
+
+# %%
+# beta 0 
+model_AE = AutoEncoder(w, h, latent_dim=w*h//10)
+
+optimizer = Adam(model_AE.parameters(), lr=0.0001)         # fresh optimizer
+
+train_epochs(50, model_AE, train_loader, optimizer, loss, beta = 0)
+view_test_sample(model_AE, test_loader)
+
 
 # %% [markdown]
 # Not bad :) Let's have a look at that loss.
@@ -458,32 +472,94 @@ def get_latent_features(model, loader):
 
 # %%
 from sklearn.manifold import TSNE
+from matplotlib.colors import ListedColormap
 
-def plot_tsne( latents, labels
-             , n_components=2
-             , random_state=42
-             , init='pca'
-             , learning_rate='auto'
-             , cmap='tab10', alpha=0.6, s=10 ):
+def run_tsne(latents, n_components=2, random_state=42, init = 'pca',  learning_rate='auto', means = None):
     tsne = TSNE(n_components=n_components, random_state=random_state, init=init, learning_rate=learning_rate)
+    if means is not None: 
+        combined = np.concatenate([latents.numpy(), means.numpy()])
+        combined_2d = tsne.fit_transform(combined)
+
+        # Split back into latents and means
+        z_2d = combined_2d[:len(latents)]                    # (10000, 2)
+        z_2d_means = combined_2d[len(latents):]              # (10, 2)
+        return z_2d, z_2d_means
+    
     z_2d = tsne.fit_transform(latents.numpy())
+    return z_2d
+
+def plot_tsne( z_2d, labels
+             , cmap='tab10', alpha=0.6, s=10, centers = None, center_labels = None):
+
+
+    ticks = np.unique(labels)
+
+    base_cmap = plt.get_cmap(cmap)
+    # Resample to n levels
+    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) +1))
+    print(len(colors_n))
+    new_cmap = ListedColormap(colors_n)
 
     plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(z_2d[:, 0], z_2d[:, 1], c=labels, cmap=cmap, alpha=alpha, s=s)
-
-    plt.colorbar(scatter, ticks=range(10))
+    scatter = plt.scatter(z_2d[:, 0], z_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
+    plt.colorbar(scatter, ticks=ticks)
     #plt.title("t-SNE visualization of MNIST Latent Space")
+
+
+    if centers is not None: 
+        for i, label in enumerate(center_labels):
+            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor = "white", size = 'large')
+
+        plt.scatter(centers[:,0], centers [:,1], s = 50, marker = "X", c = "k", zorder = 10000)       
     plt.axis('off')
-    plt.show()
 
 
 # %%
 mus, lbls = get_latent_features(model, tqdm(test_loader))
-plot_tsne(mus, lbls)
+mus_ae, lbls_ae = get_latent_features(model_AE, tqdm(test_loader))
+z_2d = run_tsne(mus)
+plot_tsne(z_2d, lbls, cmap = "tab10")
+
+# %%
+mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
+# z_2d, z_2d_means = run_tsne(mus, means = mu_mean)
+plot_tsne(z_2d, lbls, cmap = "tab10", centers = z_2d_means, center_labels=range(10))
+# plot_tsne(mu_mean, labels = range(10))
+
+# %%
+mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)]).numpy()
+im = plt.imshow(mu_mean, cmap =  "bwr")
+plt.colorbar(im)
+
+# %%
+# color by latent dimension
+abs_latent = np.argmax(abs(mus.numpy()), axis = 1)
+#plot_tsne(z_2d, abs_latent, cmap = "gist_ncar")
+
+
+
+
+
+# %%
+n = 80
+subset_mu = mus.numpy()[:n ]
+subset_labels = lbls.numpy()[:n ]
+
+
+# Sort by label 
+sort_idx = np.argsort(subset_labels)
+subset_mu = subset_mu[sort_idx]
+subset_labels = subset_labels[sort_idx]
+
+fig, ax = plt.subplots(figsize = (10, 19))
+im = ax.imshow(subset_mu, cmap = "bwr")
+ax.set_yticks(ticks = np.arange(n ), labels = subset_labels)
+plt.colorbar(im, shrink = 0.5)
+plt.show()
 
 # %%
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 # Fit a logistic regression on the latent space
 clf = LogisticRegression(max_iter=1000)
@@ -492,10 +568,62 @@ clf.fit(mus.numpy(), lbls.numpy())
 # Predict and compute accuracy
 preds = clf.predict(mus.numpy())
 accuracy = accuracy_score(lbls.numpy(), preds)
-print(f"Accuracy: {accuracy:.4f}")
+
+# Compute confusion matrix
+unique_lbls = sorted(set(lbls.numpy()))
+conf_m = confusion_matrix(lbls.numpy(), preds, labels = unique_lbls)
+
+# %% [markdown]
+# Now let's plot the confusion matrix:
 
 # %%
-np.unique(lbls == preds, return_counts=True)
+fig, ax = plt.subplots()
+ax.imshow(conf_m)
+ax.set_title(f"Accuracy: {accuracy:.4f}")
+ax.set_ylabel("True")
+ax.set_xlabel("Predicted")
+for i in range(conf_m.shape[0]):
+    for j in range(conf_m.shape[1]):
+        text = ax.text(j, i, conf_m[i, j],
+                       ha="center", va="center", color="w")
+        
+ax.set_xticks(unique_lbls)
+ax.set_yticks(unique_lbls);
+
+# %% [markdown]
+# ### Sample from the latent space
+
+# %%
+# Plot average latent vectors 
+fig, ax = plt.subplots(1, 10, figsize = (20, 10))
+with torch.no_grad():
+    for i in range(10):
+        gen = model.decode(mu_mean[i])
+
+        ax[i].imshow(gen.detach().squeeze().numpy())
+        ax[i].set_title(f"Mean for {i}")
+plt.tight_layout();
+
+# %%
+# interpolate between 0 and 3 
+digit_a = 1
+digit_b = 7
+mu_a = mu_mean[digit_a]
+mu_b = mu_mean[digit_b]
+
+steps = 8
+fig, ax = plt.subplots(1, steps, figsize = (20, 10))
+
+with torch.no_grad():
+    for i, weight_b in enumerate(np.linspace(0, 1, steps)):
+        weight_a = 1 - weight_b
+        trajectory = weight_a * mu_a + weight_b * mu_b
+        gen = model.decode(trajectory)
+
+        ax[i].imshow(gen.detach().squeeze().numpy())
+        ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
+plt.tight_layout()
+
 
 # %% [markdown]
 # ## Part A.6: Contrastive learning
