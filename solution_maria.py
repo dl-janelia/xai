@@ -252,6 +252,35 @@ def kl_loss(mu, logvar):
 
 def loss(rec, kl, beta = 0.001):
     return rec + beta * kl
+# %%
+# MSE alternative
+def gaussian_nll_loss(x, x_recon, dec_logvar=None):
+    """
+    x:           target input        [batch, C, H, W]
+    x_recon:     decoder mean        [batch, C, H, W]
+    dec_logvar:  decoder log-var     [batch, C, H, W]  (None = fixed unit variance)
+    """
+    # Flatten spatial dims -> [batch, dim]
+    x       = x.view(x.size(0), -1)
+    x_recon = x_recon.view(x_recon.size(0), -1)
+
+    if dec_logvar is None:
+        # Fixed unit variance: reduces to MSE up to a constant
+        nll = 0.5 * torch.sum((x - x_recon).pow(2), dim=1)
+    else:
+        dec_logvar = dec_logvar.view(dec_logvar.size(0), -1)
+        nll = 0.5 * torch.sum(dec_logvar + (x - x_recon).pow(2) / dec_logvar.exp(), dim=1)
+
+    return torch.mean(nll)
+
+def kl_loss(mu, logvar):
+    # sum over latent dimensions, mean over batch
+    return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
+
+def loss(rec, kl, beta = 0.001):
+    return rec + beta * kl
+
+
 # %% [markdown]
 # ### Part A.5.4: Training
 # Now we get to create and train our model on the MNIST dataset.
@@ -285,7 +314,8 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_loss = 0.0
     for x, _ in loader:
         xx, _, mu, logvar = model(x)
-        rec_l = rec_loss(x, xx)
+        # rec_l = rec_loss(x, xx)
+        rec_l = gaussian_nll_loss(x, mu, logvar)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
         optimizer.zero_grad()
@@ -392,7 +422,7 @@ view_test_sample(model, test_loader)
 
 # %%
 model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(50, model, train_loader, optimizer, loss, beta = 0.001)
+train_epochs(100, model, train_loader, optimizer, loss, beta = 1)
 view_test_sample(model, test_loader)
 
 # %%
@@ -401,7 +431,7 @@ model_AE = AutoEncoder(w, h, latent_dim=w*h//10)
 
 optimizer = Adam(model_AE.parameters(), lr=0.0001)         # fresh optimizer
 
-train_epochs(50, model_AE, train_loader, optimizer, loss, beta = 0)
+train_epochs(100, model_AE, train_loader, optimizer, loss, beta = 0)
 view_test_sample(model_AE, test_loader)
 
 
@@ -515,46 +545,25 @@ def plot_tsne( z_2d, labels
 
 
 # %%
-mus, lbls = get_latent_features(model, tqdm(test_loader))
 mus_ae, lbls_ae = get_latent_features(model_AE, tqdm(test_loader))
-z_2d = run_tsne(mus)
-plot_tsne(z_2d, lbls, cmap = "tab10")
+mu_mean_ae = torch.stack([mus_ae[lbls_ae == i].mean(dim=0) for i in range(10)])
+z_2d_ae, z_2d_means_ae = run_tsne(mus_ae, means = mu_mean_ae)
 
-# %%
+
+mus, lbls = get_latent_features(model, tqdm(test_loader))
 mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
-# z_2d, z_2d_means = run_tsne(mus, means = mu_mean)
+z_2d, z_2d_means = run_tsne(mus, means = mu_mean)
+
+plot_tsne(z_2d_ae, lbls_ae, cmap = "tab10", centers = z_2d_means_ae, center_labels=range(10))
 plot_tsne(z_2d, lbls, cmap = "tab10", centers = z_2d_means, center_labels=range(10))
-# plot_tsne(mu_mean, labels = range(10))
 
 # %%
-mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)]).numpy()
-im = plt.imshow(mu_mean, cmap =  "bwr")
+im = plt.imshow(mu_mean_ae.numpy(), cmap =  "bwr")
 plt.colorbar(im)
+plt.show()
 
-# %%
-# color by latent dimension
-abs_latent = np.argmax(abs(mus.numpy()), axis = 1)
-#plot_tsne(z_2d, abs_latent, cmap = "gist_ncar")
-
-
-
-
-
-# %%
-n = 80
-subset_mu = mus.numpy()[:n ]
-subset_labels = lbls.numpy()[:n ]
-
-
-# Sort by label 
-sort_idx = np.argsort(subset_labels)
-subset_mu = subset_mu[sort_idx]
-subset_labels = subset_labels[sort_idx]
-
-fig, ax = plt.subplots(figsize = (10, 19))
-im = ax.imshow(subset_mu, cmap = "bwr")
-ax.set_yticks(ticks = np.arange(n ), labels = subset_labels)
-plt.colorbar(im, shrink = 0.5)
+im = plt.imshow(mu_mean.numpy(), cmap =  "bwr")
+plt.colorbar(im)
 plt.show()
 
 # %%
@@ -602,12 +611,23 @@ with torch.no_grad():
 
         ax[i].imshow(gen.detach().squeeze().numpy())
         ax[i].set_title(f"Mean for {i}")
+plt.tight_layout()
+
+# %%
+# Plot average latent vectors 
+fig, ax = plt.subplots(1, 10, figsize = (20, 10))
+with torch.no_grad():
+    for i in range(10):
+        gen = model_AE.decode(mu_mean_ae[i])
+
+        ax[i].imshow(gen.detach().squeeze())
+        ax[i].set_title(f"Mean for {i}")
 plt.tight_layout();
 
 # %%
 # interpolate between 0 and 3 
-digit_a = 1
-digit_b = 7
+digit_a = 3
+digit_b = 9
 mu_a = mu_mean[digit_a]
 mu_b = mu_mean[digit_b]
 
@@ -623,6 +643,47 @@ with torch.no_grad():
         ax[i].imshow(gen.detach().squeeze().numpy())
         ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
 plt.tight_layout()
+
+
+# %%
+# interpolate between 0 and 3 
+digit_a = 3
+digit_b = 9
+mu_a = torch.Tensor(mu_mean_ae[digit_a])
+mu_b = torch.Tensor(mu_mean_ae[digit_b])
+
+steps = 8
+fig, ax = plt.subplots(1, steps, figsize = (20, 10))
+
+with torch.no_grad():
+    for i, weight_b in enumerate(np.linspace(0, 1, steps)):
+        weight_a = 1 - weight_b
+        trajectory = weight_a * mu_a + weight_b * mu_b
+        gen = model_AE.decode(trajectory)
+
+        ax[i].imshow(gen.detach().squeeze())
+        ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
+plt.tight_layout()
+
+# %%
+
+gen_vaes = []
+gen_aes = []
+
+n = 5
+with torch.no_grad():
+    for i in range(n):
+        random_latent = np.random.normal(0, 1, size=39)
+        gen_vaes.append( model.decode(torch.Tensor(random_latent)))
+        gen_aes.append( model_AE.decode(torch.Tensor(random_latent)))
+
+fig, ax = plt.subplots(2, n, figsize = (20, 10))
+for i in range(n):
+    ax[0, i].imshow(gen_vaes[i].detach().squeeze())
+    ax[1, i].imshow(gen_aes[i].detach().squeeze())
+
+plt.tight_layout()
+
 
 
 # %% [markdown]
