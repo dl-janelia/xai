@@ -177,9 +177,15 @@ class MLP(nn.Module):
         super().__init__()
         dims = [input_dim] + hidden_dims
         layers = []
+        
+        print("input dims", input_dim)
+        print("hidden dims ", hidden_dims)
+        print("dims ", dims)
+        print("output dims ", output_dim)
 
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
+            print("hello from the loop")
             if activation is not None: layers.append(activation)
 
         layers.append(nn.Linear(dims[-1], output_dim))
@@ -189,8 +195,24 @@ class MLP(nn.Module):
 
         self.net = nn.Sequential(*layers)
 
+
     def forward(self, x):
         return self.net(x)
+# %%
+# m = nn.Linear(20, 30)
+# input = torch.rand(128, 20)
+# output = m(input)
+# print (output.shape)
+# print (input.shape)
+# print (m.weight.shape)
+# print(output.size())
+# plt.imshow(input.numpy())
+# plt.show()
+# plt.imshow(output.detach().numpy())
+
+# model = AutoEncoder(w, h, latent_dim=w*h//10)
+
+
 # %% [markdown]
 # #### Part A.5.2: The AutoEncoder class
 #
@@ -202,8 +224,8 @@ import torch
 
 class AutoEncoder(nn.Module):
     def __init__( self, w, h, latent_dim
-                , enc_hidden_dims=[], enc_activation=nn.ReLU(), enc_final_activation=False
-                , dec_hidden_dims=[], dec_activation=nn.ReLU(), dec_final_activation=False
+                , enc_hidden_dims=[256], enc_activation=nn.ReLU(), enc_final_activation=False 
+                , dec_hidden_dims=[256], dec_activation=nn.ReLU(), dec_final_activation=False
                 ):
         super().__init__()
         self.w = w
@@ -217,6 +239,8 @@ class AutoEncoder(nn.Module):
                           , hidden_dims=dec_hidden_dims
                           , activation=dec_activation
                           , final_activation=dec_final_activation )
+        
+
     def encode(self, x):
         b, c, h, w = x.shape
         out = self.encoder(x.reshape(b, -1))
@@ -314,8 +338,7 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_loss = 0.0
     for x, _ in loader:
         xx, _, mu, logvar = model(x)
-        # rec_l = rec_loss(x, xx)
-        rec_l = gaussian_nll_loss(x, mu, logvar)
+        rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance        rec_l = gaussian_nll_loss(x, mu, logvar)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
         optimizer.zero_grad()
@@ -422,7 +445,7 @@ view_test_sample(model, test_loader)
 
 # %%
 model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(100, model, train_loader, optimizer, loss, beta = 1)
+train_epochs(1000, model, train_loader, optimizer, loss, beta = 1)
 view_test_sample(model, test_loader)
 
 # %%
@@ -431,7 +454,7 @@ model_AE = AutoEncoder(w, h, latent_dim=w*h//10)
 
 optimizer = Adam(model_AE.parameters(), lr=0.0001)         # fresh optimizer
 
-train_epochs(100, model_AE, train_loader, optimizer, loss, beta = 0)
+train_epochs(1000, model_AE, train_loader, optimizer, loss, beta = 0)
 view_test_sample(model_AE, test_loader)
 
 
@@ -679,8 +702,8 @@ with torch.no_grad():
 
 fig, ax = plt.subplots(2, n, figsize = (20, 10))
 for i in range(n):
-    ax[0, i].imshow(gen_vaes[i].detach().squeeze())
-    ax[1, i].imshow(gen_aes[i].detach().squeeze())
+    ax[0, i].imshow(gen_vaes[i].detach().squeeze(), cmap = "grey")
+    ax[1, i].imshow(gen_aes[i].detach().squeeze(), cmap = "grey")
 
 plt.tight_layout()
 
