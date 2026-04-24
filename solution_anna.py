@@ -330,7 +330,7 @@ plot_loss(epoch_losses)
 
 # %% [markdown]
 # ### Part A.5.5: Test
-# #### Part A.5.5.1: visualise input and reconstruction
+# #### Part A.5.5.1: Visualise our latent space
 
 # %%
 def get_latent_features(model, loader):
@@ -372,11 +372,219 @@ zs, lbls = get_latent_features(model, tqdm(test_loader))
 plot_tsne(zs, lbls)
 
 # %% [markdown]
+# ### Part A.5.5.2 Test quantitatively using a downstream task
+#
+#
+# %% [markdown]
 # ## Part A.6: Contrastive learning
-#
-#
-#
-#
+# A.6.1 What is contrastive learning? (what is it, key parts, data augmentation, feature extraction, project network and objective)
+# A.6.2 Popular contrastive approaches
+# A.6.3 The two losses depending on if we have negative example sor not (NT-Xent loss if hard negative) (Cosine similarity of not hard negative)
+# A.6.3 Hands-on approach: SimCLR
+# %% [markdown]
+# ### The simCLR loss function
+# %%
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+def simCLRLoss(z_i, z_j, temperature=0.5):
+    """
+    NT-Xent loss for SimCLR.
+    Optimized to compute the similarity matrix for all pairs in a single batch.
+
+    z_i, z_j: Projections from two different augmentations of the same batch.
+    Shape: (batch_size, z_dim)
+    """
+    batch_size = z_i.shape[0]
+
+    # Normalize projections to compute Cosine Similarity via dot product
+    z_i = F.normalize(z_i, dim=1)
+    z_j = F.normalize(z_j, dim=1)
+
+    # 2. Represent all samples: [z_i_1, ..., z_i_N, z_j_1, ..., z_j_N]
+    representations = torch.cat([z_i, z_j], dim=0)  # Shape: (2N, z_dim)
+
+    # Compute Similarity Matrix (2N x 2N)
+    # Each entry (i, j) is the cosine similarity between sample i and sample j
+    sim_matrix = torch.mm(representations, representations.t()) / temperature
+
+    # Create Mask to isolate positive pairs and remove self-similarities
+    # Positive pairs are at (i, i+N) and (i+N, i)
+    sim_ij = torch.diag(sim_matrix, batch_size)
+    sim_ji = torch.diag(sim_matrix, -batch_size)
+
+    positives = torch.cat([sim_ij, sim_ji], dim=0)  # Shape: (2N)
+
+    # Denominator: Sum of exponentials of all pairs except self-similarity
+    mask = (~torch.eye(2 * batch_size, device=sim_matrix.device).bool())
+    negatives = sim_matrix[mask].view(2 * batch_size, -1)  # Shape: (2N, 2N-1)
+
+    # Loss Calculation (Log-Sum-Exp trick for numerical stability)
+    # Using CrossEntropy logic: -log( exp(pos) / sum(exp(all_neg_and_pos)) )
+    logits = torch.cat([positives.unsqueeze(1), negatives], dim=1)
+    labels = torch.zeros(2 * batch_size, device=z_i.device, dtype=torch.long)
+
+    loss = F.cross_entropy(logits, labels)
+
+    return loss
+
+# %% [markdown]
+# ### The simCLR model
+# %%
+
+import torch
+import torch.nn as nn
+from torchvision.models import resnet18, ResNet18_Weights
+
+class SimCLRModel(nn.Module):
+    def __init__(self, input_channels=1, z_dim=128):
+        super().__init__()
+
+        # 1. Base Encoder (ResNet18)
+        # We replace the first conv to handle grayscale and strip the final FC layer
+        self.encoder = resnet18(weights=None)
+        self.encoder.conv1 = nn.Conv2d(input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.encoder.maxpool = nn.Identity()  # Common for smaller images (CIFAR/MNIST size)
+
+        # Capture the output dimension of the ResNet backbone (usually 512)
+        h_dim = self.encoder.fc.in_features
+        self.encoder.fc = nn.Identity()
+
+        # 2. Projection Head (MLP)
+        # SimCLR papers suggest a non-linear projection head improves representation quality
+        self.projector = nn.Sequential(
+            nn.Linear(h_dim, h_dim),
+            nn.ReLU(),
+            nn.Linear(h_dim, z_dim)
+        )
+
+    def forward(self, x):
+        # h: representation (used for downstream tasks)
+        # z: projection (used for the contrastive loss)
+        h = self.encoder(x)
+        z = self.projector(h)
+        return h, z
+
+# %% [markdown]
+# ### A new dataloader producing augmented views on the data
+# %%
+import torch
+from torch.utils.data import Dataset
+import torchvision.transforms as T
+# SimCLR works best when the two "views" are slightly different
+simclr_transform = T.Compose([
+    # Randomly rotate the digit (e.g., ±15 degrees)
+    T.RandomRotation(15),
+    # Randomly shift the digit slightly
+    T.RandomAffine(degrees=0, translate=(0.1, 0.1)),
+    # Convert to tensor and use your existing normalization
+    T.ToTensor(),
+    T.Normalize((0.1307,), (0.3081,))
+])
+
+class ContrastiveMNIST(Dataset):
+    def __init__(self, base_dataset, transform = simclr_transform):
+        self.base_dataset = base_dataset
+        self.transform = transform
+
+    def __getitem__(self, index):
+        img, label = self.base_dataset[index]
+        # If img is already a tensor, convert back to PIL for augmentations
+        if isinstance(img, torch.Tensor):
+            img = torchvision.transforms.ToPILImage()(img)
+
+        # Create two different augmentations
+        x_i = self.transform(img)
+        x_j = self.transform(img)
+        return x_i, x_j, label
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+# %% [markdown]
+# ### A new training function that deals with data augmentation
+# We redefine our `train_epoch` and `train_epochs` from the previous exercise to deal with the two augmented views on
+# the data required in constrastive learning approaches.
+# %%
+
+import torch
+from tqdm import tqdm
+from itertools import islice
+
+def train_epoch(model, loader, optimizer, criterion, device):
+    model.train()
+    running_loss = 0.0
+
+    # unpack x1 (view 1), x2 (view 2), and ignore labels (_)
+    for x1, x2, _ in loader:
+        x1, x2 = x1.to(device), x2.to(device)
+
+        # Forward pass: get projections (z) for both views
+        _, z1 = model(x1)
+        _, z2 = model(x2)
+
+        # Calculate SimCLR loss
+        loss_val = criterion(z1, z2)
+
+        # Optimization
+        optimizer.zero_grad()
+        loss_val.backward()
+        optimizer.step()
+
+        # Stats
+        running_loss += loss_val.item()
+
+    return running_loss / len(loader)
+
+epoch_losses = [] # reset list of accumulated losses
+def train_epochs(n, model, loader, optimizer, criterion, device):
+    for epoch in range(n):
+        # Using islice to speed up the showcase exercise
+        fresh_loader_iter = iter(loader)
+        limit = 50
+        sliced_loader = tqdm(islice(fresh_loader_iter, limit), total=limit, desc=f"Epoch {epoch + 1}")
+
+        avg_loss = train_epoch(model, sliced_loader, optimizer, criterion, device)
+        epoch_losses.append(avg_loss)
+
+        tqdm.write(f"Epoch {epoch + 1} Complete. Avg Loss: {avg_loss:.4f}")
+    return epoch_losses
+
+# %% [markdown]
+# ### And now we train
+# %%
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model = SimCLRModel(input_channels=1, z_dim=64).to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+contrastive_train = ContrastiveMNIST(train_mnist, transform=simclr_transform)
+train_loader = torch.utils.data.DataLoader(contrastive_train, batch_size=32, shuffle=True)
+
+losses = train_epochs(20, model, train_loader, optimizer, simCLRLoss, device)
+
+plot_loss(epoch_losses)
+
+
+# %%
+def get_latent_features(model, loader):
+    model.eval()
+    latents_h, latents_z = [], []
+    labels = []
+
+    with torch.no_grad():
+        for x, lbl in tqdm(loader):
+            h, z = model(x)
+            latents_z.append(z)
+            latents_h.append(h)
+            labels.append(lbl)
+    return torch.cat(latents_h, dim=0), torch.cat(latents_z, dim=0), torch.cat(labels, dim=0)
+
+h_features, z_features, y_labels = get_latent_features(model, test_loader)
+plot_tsne(h_features[:2000], y_labels[:2000])
+plot_tsne(z_features[:2000], y_labels[:2000])
+
 # %% [markdown]
 # # PART B: Explainable AI (XAI)
 # ## Part B.1: Setup
