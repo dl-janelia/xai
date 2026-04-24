@@ -16,16 +16,6 @@
 #     name: python3
 # ---
 
-# %% [markdown]
-# ## Characteristics to highlight
-# * Latent space exploration – t-SNE, classification / clustering
-# * Data compression (v briefly); maybe with note to denoising? 
-# * NEW: Data generation: Low vs high Beta 
-#
-#
-# ## Not discussed: 
-# * Disentanglement 
-
 # %% [markdown] tags=[]
 # # Exercise 7: Representation learning and XAI
 #
@@ -80,10 +70,13 @@
 # ## Part A.3: Unsupervised learning
 #
 # ## Part A.4: General set-up
-# In this part of the notebook, we will load the same dataset as in the previous exercise.
+# In this part of the notebook, we will load the same dataset as in the previous exercise. 
 # ### Part A.4.1: The MNIST dataset
-# MNIST is a machine learning benchmark dataset, consisting of 70,000 grayscale images of handwritten digits 0 - 9. 
-# MNIST is split into 60,000 training images and 10,000 testing images. Each image has a resolution of 28x28 pixels.
+# MNIST is a machine learning benchmark dataset:
+# * **70,000** grayscale images of handwritten digits 0 - 9.  
+# * Of which are **60,000** training images and **10,000** testing images. 
+# *  Each image has a resolution of **28x28** pixels.  
+#
 # It is a great dataset to introduce representation learning because it is simple enough to train quickly,
 # but still structured enough that we can visually inspect and intuitively evaluate the quality of the learned representations
 # and reconstructions.
@@ -97,8 +90,7 @@
 # %%
 import torchvision
 
-transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])#, TODO: removed normalize to get 0 - 1 scale  
-#                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]) # mean and std of training data
+transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 train_mnist = torchvision.datasets.MNIST("./mnist", train=True, download=False, transform=transform)
 test_mnist = torchvision.datasets.MNIST("./mnist", train=False, download=False, transform=transform)
 
@@ -121,15 +113,12 @@ fig, axs = plt.subplots(4, 4, figsize=(8, 8))
 # Load the first 16 images and labels
 xs = [train_mnist[i][0] for i in range(16)] # images
 ys = [train_mnist[i][1] for i in range(16)] # labels
-vmin = min(x.min().item() for x in xs) # min gray value of loaded images (for shared color bar)
-vmax = max(x.max().item() for x in xs) # max gray value
-
 
 for i, ax in enumerate(axs.flatten()):
     x = xs[i]
     y = ys[i]
     x = x.permute((1, 2, 0))  # make channels last
-    im = ax.imshow(x, vmin = vmin, vmax = vmax, cmap = "gray")
+    im = ax.imshow(x,  cmap = "gray")
     ax.set_title(f"Class {y}")
     ax.axis("off")
 
@@ -158,11 +147,12 @@ smpl, lbl = next(iter(train_loader))
 print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 
 # %% [markdown]
-# Dataloader elements come in 8 at a time, which is the `batch_size` we set above. Hence, the first tensor dimension is the "batch" dimension and has size 8.   
-# The labels are in a tensor of size 8 as opposed to a single value like in the dataset case.  
-# Note that, both in the dataset and in the dataloader, the data is not presented as a 2d 28x28 image, but rather as a 1x28x28 3d piece of data.  
-# This is useful when using multichannel data, but in our case, this extra dimension is superfluous. Keep this in mind when we use the data in the model for training, at which point we will drop the channel dimension.
+# Dataloader elements come in **8** at a time, which is the `batch_size` we set above. Hence, the first tensor dimension is the "batch" dimension and has size **8**.   
+# The labels are in a tensor of size **8** as opposed to a single value like in the dataset case.  
+# Note that, both in the dataset and in the dataloader, the data is not presented as a 2d `28x28` image, but rather as `1x28x28` 3d piece of data.  
+# This is useful when using multichannel data, but in our case, this extra dimension is superfluous. We will therefore drop the channel dimension for training. 
 #
+# In Summary: 
 # | | Dataset | DataLoader |
 # |---|---|---|
 # | Image shape | `(1, 28, 28)` | `(8, 1, 28, 28)` |
@@ -171,11 +161,14 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # | Batch dimension | ❌ | ✅ (size = `batch_size`) |
 
 # %% [markdown]
-# ### Part A.5: Autoencoders
-# Now, let's present the model we will use to train. An autoencoder is an machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size. The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction. In our case, we convert `28 * 28 = 784` pixel images into a few core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
+# ### Part A.5: Variational autoencoders
+# A variational autoencoder is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.  
+# The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.  
+# In our case, we convert `28 * 28 = 784` pixel images into a few core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
 # #### Part A.5.1: An MLP class for encoder and decoder
-# For this exercise, we chose a simple MLP (multi-layer perceptron) as the architecture to back both the encoder and the decoder. MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU) to learn. Here, we default to a single layer.
+# We chose a simple MLP (multi-layer perceptron) as the architecture to back both the encoder and the decoder.  
+# MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU) to learn. 
 
 # %%
 import torch.nn as nn
@@ -194,7 +187,7 @@ class MLP(nn.Module):
 
         layers.append(nn.Linear(dims[-1], output_dim))
 
-        if final_activation and activation is not None:
+        if final_activation is not None:
             layers.append(final_activation)
 
         self.net = nn.Sequential(*layers)
@@ -202,52 +195,49 @@ class MLP(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-# %%
-# m = nn.Linear(20, 30)
-# input = torch.rand(128, 20)
-# output = m(input)
-# print (output.shape)
-# print (input.shape)
-# print (m.weight.shape)
-# print(output.size())
-# plt.imshow(input.numpy())
-# plt.show()
-# plt.imshow(output.detach().numpy())
-
-# model = AutoEncoder(w, h, latent_dim=w*h//10)
-
-
 # %% [markdown]
-# #### Part A.5.2: The AutoEncoder class
+# #### Part A.5.2: The VariationalAutoEncoder class
 #
-# Here we provide a simple AutoEncoder class making use of our previously defined MLP class for both its encoder and decoder. Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
+# Here we provide a simple VariationalAutoEncoder class making use of our previously defined MLP class for both its encoder and decoder.  
+# Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
 #
-# The decoder consumes a latent feature vector and uses an MLP to reconstruct the original sample, reshaping as appropriate.
+# The encoder: 
+# * Reshapes the input by dropping the unused channel dimension. 
+# * Reduces width and height (28 x 28) to a single dimension (28 * 28 = 784). 
+# * Outputs `mu` and `logvar`; single-dimensional tensors that represent the center and logvariance for a given input
+#
+# The reparametrization trick: 
+# * Allows to sample the latent variable `z` as it if came from a Normal distribution with `mu` and $std = e^{logvar/2}$  
+# * However, sampling `z` from `mu` and `std` does not allow for backpropagation
+# * To allow for backpropagation, the model samples $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
+# * And then samples z with the help of $\epsilon$: $z = mu + \epsilon * e^{logvar/2}$
+#
+# The decoder: 
+# * Takes in a latent vector z and uses an MLP to reconstruct the original sample, reshaping as appropriate.
 # %%
 import torch
 
-class AutoEncoder(nn.Module):
+class VariationalAutoEncoder(nn.Module):
     def __init__( self, w, h, latent_dim
-                , enc_hidden_dims=[256, 128, 64], enc_activation=nn.ReLU(), enc_final_activation=False 
-                , dec_hidden_dims=[64, 128, 256], dec_activation=nn.ReLU(), dec_final_activation=False
+                , enc_hidden_dims=[256, 128, 64], enc_activation=nn.ReLU()
+                , dec_hidden_dims=[64, 128, 256], dec_activation=nn.ReLU()
                 ):
         super().__init__()
         self.w = w
         self.h = h
         data_dim = w * h
         
-        self.encoder = MLP( data_dim, latent_dim*2 # latent_dim * 2, because it will be split into mu and logvar
+        self.encoder = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
                           , hidden_dims=enc_hidden_dims
-                          , activation=enc_activation
-                          , final_activation=enc_final_activation )
+                          , activation=enc_activation)
         self.decoder = MLP( latent_dim, data_dim
                           , hidden_dims=dec_hidden_dims
                           , activation=dec_activation
-                          , final_activation=nn.Sigmoid())#dec_final_activation )
+                          , final_activation=nn.Sigmoid())
         
 
     def encode(self, x):
-        b, c, h, w = x.shape
+        b  = x.shape[0] # batchsize
         out = self.encoder(x.reshape(b, -1))
         mu, logvar = torch.chunk(out, 2, dim = 1)
         return mu, logvar
@@ -257,7 +247,6 @@ class AutoEncoder(nn.Module):
         return out.reshape(-1, 1, self.w, self.h) # this is hard-coding one channel 
     
     def forward(self, x):
-        b, c, h, w = x.shape
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         xx = self.decode(z)
@@ -271,38 +260,9 @@ class AutoEncoder(nn.Module):
 
 # %% [markdown]
 # ### Part A.5.3: The loss function
-# To train, we compute a Mean Squared Error "reconstruction" loss
+# To train, we compute a Binary Cross Entropy "reconstruction" loss
 # %%
-# rec_loss = nn.MSELoss()
-
-# def kl_loss(mu, logvar):
-#     # sum over latent dimensions, mean over batch
-#     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
-
-# def loss(rec, kl, beta = 0.001):
-#     return rec + beta * kl
-
-rec_loss = nn.BCELoss()
-# %%
-# MSE alternative
-def gaussian_nll_loss(x, x_recon, dec_logvar=None):
-    """
-    x:           target input        [batch, C, H, W]
-    x_recon:     decoder mean        [batch, C, H, W]
-    dec_logvar:  decoder log-var     [batch, C, H, W]  (None = fixed unit variance)
-    """
-    # Flatten spatial dims -> [batch, dim]
-    x       = x.view(x.size(0), -1)
-    x_recon = x_recon.view(x_recon.size(0), -1)
-
-    if dec_logvar is None:
-        # Fixed unit variance: reduces to MSE up to a constant
-        nll = 0.5 * torch.sum((x - x_recon).pow(2), dim=1)
-    else:
-        dec_logvar = dec_logvar.view(dec_logvar.size(0), -1)
-        nll = 0.5 * torch.sum(dec_logvar + (x - x_recon).pow(2) / dec_logvar.exp(), dim=1)
-
-    return torch.mean(nll)
+rec_loss = nn.BCELoss(reduction="sum")
 
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
@@ -318,11 +278,11 @@ def loss(rec, kl, beta = 0.001):
 #
 # #### Part A.5.4.1: Model instance and optimizer
 #
-# We first create an instance of our AutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate size, and chose a latent dimension size as well (here, we compress by 10 the total size of the image).
+# We first create an instance of our VariationalAutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate size, and chose a latent dimension size as well (here, we compress by 10 the total size of the image).
 # %%
 data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
-model = AutoEncoder(w, h, latent_dim=w*h//10)
+model = VariationalAutoEncoder(w, h, latent_dim=11)
 
 # %% [markdown]
 # We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
@@ -345,8 +305,6 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_loss = 0.0
     for x, _ in loader:
         xx, _, mu, logvar = model(x)
-        #rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance   TODO: maybe binary cross-entropy
-        # rec_l = rec_loss(x, xx) # input, target. maybe switch around? 
         rec_l = rec_loss(xx, x)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
@@ -357,35 +315,86 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
         running_rec_loss += rec_l.item()
         running_kl_loss += kl_l.item()
         running_loss += l.item()
-        #print(f"running loss: {running_loss:.4f}, instant loss: {l.item()}, loader len: {len(loader)}")
-    # average loss for epoch
+
     avg_rec_loss = running_rec_loss / len(loader)
     avg_kl_loss = running_kl_loss / len(loader)
     avg_loss = running_loss / len(loader)
     return avg_rec_loss, avg_kl_loss, avg_loss
 
-epoch_rec_losses = []
-epoch_kl_losses = []
-epoch_losses = []
 
+# from tqdm.auto import tqdm
+# from itertools import islice
+
+# def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
+#     epoch_rec_losses = []
+#     epoch_kl_losses = []
+#     epoch_losses = []
+
+#     pbar = tqdm(range(n))
+#     for epoch in pbar:
+#         # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
+#         fresh_loader_iter = iter(loader)
+#         sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True) # set disabled=False for batch-loading bar
+#         avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss, beta = beta)
+#         epoch_rec_losses.append(avg_rec_loss)
+#         epoch_kl_losses.append(avg_kl_loss)
+#         epoch_losses.append(avg_loss)
+#         # tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
+#         pbar.set_postfix(
+#             loss=f"{avg_loss:.4f}",
+#             rec=f"{avg_rec_loss:.4f}",
+#             kl=f"{avg_kl_loss:.4f}"
+#         )
+
+#     return {"loss": epoch_losses, "rec": epoch_rec_losses, "kl": epoch_kl_losses}
+
+# %%
 from tqdm.auto import tqdm
 from itertools import islice
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
 
-def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
-    for epoch in tqdm(range(n)):
-        # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
+def plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses, epoch, n):
+    fig, axes = plt.subplots(1, 3, figsize=(15, 3))
+    for ax, values, title in zip(
+        axes,
+        [epoch_losses, epoch_rec_losses, epoch_kl_losses],
+        ["Total Loss", "Reconstruction Loss", "KL Loss"]
+    ):
+        ax.plot(values, c = "k")
+        ax.set_title(f"{title}: {values[-1]:.4f}")
+        ax.set_xlabel("Epoch")
+        ax.grid(True, linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+
+def train_epochs(n, model, loader, optimizer, loss, beta=0.001, plot_every=10):
+    epoch_rec_losses = []
+    epoch_kl_losses = []
+    epoch_losses = []
+
+    for epoch in range(n):
         fresh_loader_iter = iter(loader)
-        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True) # set disabled=False for batch-loading bar
-        avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss, beta = beta)
+        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True)
+        avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(
+            model, sliced_loader, optimizer, loss, beta=beta
+        )
         epoch_rec_losses.append(avg_rec_loss)
         epoch_kl_losses.append(avg_kl_loss)
         epoch_losses.append(avg_loss)
-        tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
+
+        if (epoch + 1) % plot_every == 0:
+            clear_output(wait=True)
+            print(f"Epoch {epoch+1}/{n} | loss={avg_loss:.4f} | rec={avg_rec_loss:.4f} | kl={avg_kl_loss:.4f}")
+            plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses, epoch, n)
+
+    return {"loss": epoch_losses, "rec": epoch_rec_losses, "kl": epoch_kl_losses}
 
 
 # %%
 def reset_model(latent_dim = w*h//10):
-    model = AutoEncoder(w, h, latent_dim=latent_dim)  # fresh weights
+    model = VariationalAutoEncoder(w, h, latent_dim=latent_dim)  # fresh weights
     optimizer = Adam(model.parameters(), lr=0.0001)         # fresh optimizer
     epoch_rec_losses, epoch_kl_losses, epoch_losses = [], [], []  # fresh history
     return model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses
@@ -396,7 +405,7 @@ def reset_model(latent_dim = w*h//10):
 
 # %%
 # model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(1, model, train_loader, optimizer, loss, beta = 0)
+train_epochs(1, model, train_loader, optimizer, loss, beta = 0);
 
 
 # %% [markdown]
@@ -446,25 +455,35 @@ view_test_sample(model, test_loader)
 
 # %%
 # model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(5, model, train_loader, optimizer, loss, beta = 0.1)
+train_epochs(10, model, train_loader, optimizer, loss, beta = 0)
 view_test_sample(model, test_loader)
 
 # %% [markdown]
-# A little more...
+# Looking better, but clearly we need to train more. Let's start a new model from scratch and train it for 1000 epochs
+# * Instantiate a new autoencoder model and name it `model0`
+# * Instantiate a new optimizer (like above)
+# * Train your new model for 1000 epochs 
 
 # %%
-model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model(latent_dim=11)
-train_epochs(1000, model, train_loader, optimizer, loss, beta = 0.001)
-view_test_sample(model, test_loader)
+model0 = VariationalAutoEncoder(w, h, latent_dim = 11)  # fresh weights
+optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
+epochs = 1000
+
+losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = 0)
+
+
+# %%
+view_test_sample(model0, test_loader)
 
 # %%
 # beta 0 
-model_AE = AutoEncoder(w, h, latent_dim=11)
+model1 = VariationalAutoEncoder(w, h, latent_dim=11)
+optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
+epochs = 1000
+losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = 1)
 
-optimizer = Adam(model_AE.parameters(), lr=0.0001)         # fresh optimizer
 
-train_epochs(1000, model_AE, train_loader, optimizer, loss, beta = 0)
-view_test_sample(model_AE, test_loader)
+view_test_sample(model1, test_loader)
 
 
 # %% [markdown]
@@ -472,43 +491,35 @@ view_test_sample(model_AE, test_loader)
 # Below is a simple function to plot it from the list we have accumulated in `epoch_losses` as we've trained.
 
 # %%
-import numpy as np
-def plot_loss(epoch_losses, epoch_rec_losses, epoch_kl_losses):
+def plot_losses_compare(loss_dicts, labels, colors=None):
+    """
+    loss_dicts: list of dicts, e.g. [losses_1, losses_2]
+    labels:     list of strings, e.g. ["Beta 0.001", "Beta 1"]
+    colors:     optional list of colors, e.g. ["blue", "red"]
+    """
+    if colors is None:
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']  # default matplotlib colors
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    axes[0].plot(epoch_losses, label='Total Loss', color='blue', marker='o', markersize=4)
-    axes[0].set_title("Training Loss Curve")
-    axes[0].set_xlabel("Epoch")
-    axes[0].set_ylabel("Loss")
-    axes[0].grid(True, linestyle='--', alpha=0.6)
-    axes[0].legend()
+    keys = list(loss_dicts[0].keys())
+    fig, axes = plt.subplots(1, len(keys), figsize=(6 * len(keys), 5))
 
-
-    axes[1].plot(epoch_rec_losses, label='Reconstruction Loss', color='blue', marker='o', markersize=4)
-    axes[1].set_title("Training Rec Loss Curve")
-    axes[1].set_xlabel("Epoch")
-    axes[1].set_ylabel("Reconstruction loss")
-    axes[1].grid(True, linestyle='--', alpha=0.6)
-    axes[1].legend()
-
-    axes[2].plot(epoch_kl_losses, label='KL Loss', color='blue', marker='o', markersize=4)
-    axes[2].set_title("Training KL Loss Curve")
-    axes[2].set_xlabel("Epoch")
-    axes[2].set_ylabel("KL loss")
-    axes[2].grid(True, linestyle='--', alpha=0.6)
-    axes[2].legend()
-
-    # Ensure x-axis shows integer epoch numbers
-    #plt.xticks(range(len(losses)))
-    # axes[0].xticks(np.arange(0, len(losses) + 1, 10))
+    for i, key in enumerate(keys):
+        for loss_dict, label, color in zip(loss_dicts, labels, colors):
+            axes[i].plot(loss_dict[key], label=label, color=color, marker='o', markersize=2)
+        axes[i].set_title(key)
+        axes[i].set_xlabel("Epoch")
+        axes[i].set_ylabel("Loss")
+        axes[i].grid(True, linestyle='--', alpha=0.6)
+        axes[i].legend()
 
     plt.tight_layout()
     plt.show()
 
 
-
-
-plot_loss(epoch_losses, epoch_rec_losses, epoch_kl_losses)
+plot_losses_compare(
+    loss_dicts=[losses0, losses1],
+    labels=["Beta 0", "Beta 1"],
+)
 
 
 # %% [markdown]
@@ -577,12 +588,12 @@ def plot_tsne( z_2d, labels
 
 
 # %%
-mus_ae, lbls_ae = get_latent_features(model_AE, tqdm(test_loader))
+mus_ae, lbls_ae = get_latent_features(model0, tqdm(test_loader))
 mu_mean_ae = torch.stack([mus_ae[lbls_ae == i].mean(dim=0) for i in range(10)])
 z_2d_ae, z_2d_means_ae = run_tsne(mus_ae, means = mu_mean_ae)
 
 
-mus, lbls = get_latent_features(model, tqdm(test_loader))
+mus, lbls = get_latent_features(model1, tqdm(test_loader))
 mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
 z_2d, z_2d_means = run_tsne(mus, means = mu_mean)
 
