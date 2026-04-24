@@ -16,6 +16,16 @@
 #     name: python3
 # ---
 
+# %% [markdown]
+# ## Characteristics to highlight
+# * Latent space exploration – t-SNE, classification / clustering
+# * Data compression (v briefly); maybe with note to denoising? 
+# * NEW: Data generation: Low vs high Beta 
+#
+#
+# ## Not discussed: 
+# * Disentanglement 
+
 # %% [markdown] tags=[]
 # # Exercise 7: Representation learning and XAI
 #
@@ -87,8 +97,8 @@
 # %%
 import torchvision
 
-transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor(), 
-                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]) # mean and std of training data
+transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])#, TODO: removed normalize to get 0 - 1 scale  
+#                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]) # mean and std of training data
 train_mnist = torchvision.datasets.MNIST("./mnist", train=True, download=False, transform=transform)
 test_mnist = torchvision.datasets.MNIST("./mnist", train=False, download=False, transform=transform)
 
@@ -172,26 +182,20 @@ import torch.nn as nn
 
 class MLP(nn.Module):
     def __init__(self, input_dim, output_dim
-                , hidden_dims=[], activation=nn.ReLU(), final_activation=True ):
+                , hidden_dims=[], activation=nn.ReLU(), final_activation=None ):
         
         super().__init__()
         dims = [input_dim] + hidden_dims
         layers = []
-        
-        print("input dims", input_dim)
-        print("hidden dims ", hidden_dims)
-        print("dims ", dims)
-        print("output dims ", output_dim)
 
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
-            print("hello from the loop")
             if activation is not None: layers.append(activation)
 
         layers.append(nn.Linear(dims[-1], output_dim))
 
         if final_activation and activation is not None:
-            layers.append(activation)
+            layers.append(final_activation)
 
         self.net = nn.Sequential(*layers)
 
@@ -239,7 +243,7 @@ class AutoEncoder(nn.Module):
         self.decoder = MLP( latent_dim, data_dim
                           , hidden_dims=dec_hidden_dims
                           , activation=dec_activation
-                          , final_activation=dec_final_activation )
+                          , final_activation=nn.Sigmoid())#dec_final_activation )
         
 
     def encode(self, x):
@@ -269,14 +273,16 @@ class AutoEncoder(nn.Module):
 # ### Part A.5.3: The loss function
 # To train, we compute a Mean Squared Error "reconstruction" loss
 # %%
-rec_loss = nn.MSELoss()
+# rec_loss = nn.MSELoss()
 
-def kl_loss(mu, logvar):
-    # sum over latent dimensions, mean over batch
-    return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
+# def kl_loss(mu, logvar):
+#     # sum over latent dimensions, mean over batch
+#     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
 
-def loss(rec, kl, beta = 0.001):
-    return rec + beta * kl
+# def loss(rec, kl, beta = 0.001):
+#     return rec + beta * kl
+
+rec_loss = nn.BCELoss()
 # %%
 # MSE alternative
 def gaussian_nll_loss(x, x_recon, dec_logvar=None):
@@ -339,7 +345,9 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_loss = 0.0
     for x, _ in loader:
         xx, _, mu, logvar = model(x)
-        rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance   TODO: maybe binary cross-entropy
+        #rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance   TODO: maybe binary cross-entropy
+        # rec_l = rec_loss(x, xx) # input, target. maybe switch around? 
+        rec_l = rec_loss(xx, x)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
         optimizer.zero_grad()
@@ -446,7 +454,7 @@ view_test_sample(model, test_loader)
 
 # %%
 model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model(latent_dim=11)
-train_epochs(1000, model, train_loader, optimizer, loss, beta = 1)
+train_epochs(1000, model, train_loader, optimizer, loss, beta = 0.001)
 view_test_sample(model, test_loader)
 
 # %%
