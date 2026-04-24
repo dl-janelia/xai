@@ -224,18 +224,19 @@ import torch
 
 class AutoEncoder(nn.Module):
     def __init__( self, w, h, latent_dim
-                , enc_hidden_dims=[256], enc_activation=nn.ReLU(), enc_final_activation=False 
-                , dec_hidden_dims=[256], dec_activation=nn.ReLU(), dec_final_activation=False
+                , enc_hidden_dims=[256, 128, 64], enc_activation=nn.ReLU(), enc_final_activation=False 
+                , dec_hidden_dims=[64, 128, 256], dec_activation=nn.ReLU(), dec_final_activation=False
                 ):
         super().__init__()
         self.w = w
         self.h = h
         data_dim = w * h
-        self.encoder = MLP( data_dim, latent_dim
+        
+        self.encoder = MLP( data_dim, latent_dim*2 # latent_dim * 2, because it will be split into mu and logvar
                           , hidden_dims=enc_hidden_dims
                           , activation=enc_activation
                           , final_activation=enc_final_activation )
-        self.decoder = MLP( latent_dim//2, data_dim
+        self.decoder = MLP( latent_dim, data_dim
                           , hidden_dims=dec_hidden_dims
                           , activation=dec_activation
                           , final_activation=dec_final_activation )
@@ -338,7 +339,7 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     running_loss = 0.0
     for x, _ in loader:
         xx, _, mu, logvar = model(x)
-        rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance        rec_l = gaussian_nll_loss(x, mu, logvar)
+        rec_l = gaussian_nll_loss(x, xx)        # x vs reconstruction, fixed variance   TODO: maybe binary cross-entropy
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
         optimizer.zero_grad()
@@ -375,8 +376,8 @@ def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
 
 
 # %%
-def reset_model():
-    model = AutoEncoder(w, h, latent_dim=w*h//10)  # fresh weights
+def reset_model(latent_dim = w*h//10):
+    model = AutoEncoder(w, h, latent_dim=latent_dim)  # fresh weights
     optimizer = Adam(model.parameters(), lr=0.0001)         # fresh optimizer
     epoch_rec_losses, epoch_kl_losses, epoch_losses = [], [], []  # fresh history
     return model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses
@@ -437,20 +438,20 @@ view_test_sample(model, test_loader)
 
 # %%
 # model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(5, model, train_loader, optimizer, loss, beta = 0)
+train_epochs(5, model, train_loader, optimizer, loss, beta = 0.1)
 view_test_sample(model, test_loader)
 
 # %% [markdown]
 # A little more...
 
 # %%
-model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
+model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model(latent_dim=11)
 train_epochs(1000, model, train_loader, optimizer, loss, beta = 1)
 view_test_sample(model, test_loader)
 
 # %%
 # beta 0 
-model_AE = AutoEncoder(w, h, latent_dim=w*h//10)
+model_AE = AutoEncoder(w, h, latent_dim=11)
 
 optimizer = Adam(model_AE.parameters(), lr=0.0001)         # fresh optimizer
 
@@ -581,12 +582,72 @@ plot_tsne(z_2d_ae, lbls_ae, cmap = "tab10", centers = z_2d_means_ae, center_labe
 plot_tsne(z_2d, lbls, cmap = "tab10", centers = z_2d_means, center_labels=range(10))
 
 # %%
+from sklearn.decomposition import PCA
+from matplotlib.colors import ListedColormap
+
+def run_pca(latents, n_components=2, random_state=42, means=None):
+    pca = PCA(n_components=n_components, random_state=random_state)
+    
+    if means is not None:
+        combined = np.concatenate([latents.numpy(), means.numpy()])
+        combined_2d = pca.fit_transform(combined)
+
+        # Split back into latents and means
+        z_2d = combined_2d[:len(latents)]        # (10000, 2)
+        z_2d_means = combined_2d[len(latents):]  # (10, 2)
+        return z_2d, z_2d_means, pca.explained_variance_ratio_
+
+    z_2d = pca.fit_transform(latents.numpy())
+    return z_2d, pca.explained_variance_ratio_
+
+
+def plot_pca(z_2d, labels, explained_variance_ratio,
+             cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
+
+    ticks = np.unique(labels)
+
+    base_cmap = plt.get_cmap(cmap)
+    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) + 1))
+    new_cmap = ListedColormap(colors_n)
+
+    total_var = explained_variance_ratio.sum() * 100
+
+    plt.figure(figsize=(10, 8))
+    scatter = plt.scatter(z_2d[:, 0], z_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
+    plt.colorbar(scatter, ticks=ticks)
+    plt.title(
+        f"PC1: {explained_variance_ratio[0]*100:.1f}%  |  "
+        f"PC2: {explained_variance_ratio[1]*100:.1f}%  |  "
+        f"Total: {total_var:.1f}% variance explained"
+    )
+
+    if centers is not None:
+        for i, label in enumerate(center_labels):
+            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor="white", size='large')
+        plt.scatter(centers[:, 0], centers[:, 1], s=50, marker="X", c="k", zorder=10000)
+    plt.axis('off')
+
+
+# %%
+z_2d_ae, z_2d_means_ae, evr_ae = run_pca(mus_ae, means=mu_mean_ae)
+z_2d, z_2d_means, evr = run_pca(mus, means=mu_mean)
+
+plot_pca(z_2d_ae, lbls_ae, evr_ae, cmap="tab10", centers=z_2d_means_ae, center_labels=range(10))
+plot_pca(z_2d, lbls, evr, cmap="tab10", centers=z_2d_means, center_labels=range(10))
+
+# %%
 im = plt.imshow(mu_mean_ae.numpy(), cmap =  "bwr")
 plt.colorbar(im)
+plt.xlabel("latent dim")
+plt.ylabel("label")
+plt.yticks([0,1,2,3,4,5,6,7,8,9])
 plt.show()
 
 im = plt.imshow(mu_mean.numpy(), cmap =  "bwr")
 plt.colorbar(im)
+plt.xlabel("latent dim")
+plt.ylabel("label")
+plt.yticks([0,1,2,3,4,5,6,7,8,9])
 plt.show()
 
 # %%
@@ -594,33 +655,46 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 # Fit a logistic regression on the latent space
-clf = LogisticRegression(max_iter=1000)
-clf.fit(mus.numpy(), lbls.numpy())
+def logreg(mus, lbls):
+    clf = LogisticRegression(max_iter=1000)
+    clf.fit(mus.numpy(), lbls.numpy())
 
-# Predict and compute accuracy
-preds = clf.predict(mus.numpy())
-accuracy = accuracy_score(lbls.numpy(), preds)
+    # Predict and compute accuracy
+    preds = clf.predict(mus.numpy())
+    accuracy = accuracy_score(lbls.numpy(), preds)
 
-# Compute confusion matrix
-unique_lbls = sorted(set(lbls.numpy()))
-conf_m = confusion_matrix(lbls.numpy(), preds, labels = unique_lbls)
+    # Compute confusion matrix
+    unique_lbls = sorted(set(lbls.numpy()))
+    conf_m = confusion_matrix(lbls.numpy(), preds, labels = unique_lbls)
+
+    return accuracy, unique_lbls, conf_m
+
+
+accuracy, unique_lbls, conf_m = logreg(mus, lbls)
+accuracy_ae, unique_lbls_ae, conf_m_ae = logreg(mus_ae, lbls_ae)
+
 
 # %% [markdown]
 # Now let's plot the confusion matrix:
 
 # %%
-fig, ax = plt.subplots()
-ax.imshow(conf_m)
-ax.set_title(f"Accuracy: {accuracy:.4f}")
-ax.set_ylabel("True")
-ax.set_xlabel("Predicted")
-for i in range(conf_m.shape[0]):
-    for j in range(conf_m.shape[1]):
-        text = ax.text(j, i, conf_m[i, j],
-                       ha="center", va="center", color="w")
-        
-ax.set_xticks(unique_lbls)
-ax.set_yticks(unique_lbls);
+def confmatrix(conf_m, accuracy, unique_lbls):
+    fig, ax = plt.subplots()
+    ax.imshow(conf_m)
+    ax.set_title(f"Accuracy: {accuracy:.4f}")
+    ax.set_ylabel("True")
+    ax.set_xlabel("Predicted")
+    for i in range(conf_m.shape[0]):
+        for j in range(conf_m.shape[1]):
+            text = ax.text(j, i, conf_m[i, j],
+                        ha="center", va="center", color="w")
+            
+    ax.set_xticks(unique_lbls)
+    ax.set_yticks(unique_lbls);
+
+
+confmatrix(conf_m, accuracy, unique_lbls)
+confmatrix(conf_m_ae, accuracy_ae, unique_lbls_ae)
 
 # %% [markdown]
 # ### Sample from the latent space
@@ -693,10 +767,10 @@ plt.tight_layout()
 gen_vaes = []
 gen_aes = []
 
-n = 5
+n = 10
 with torch.no_grad():
     for i in range(n):
-        random_latent = np.random.normal(0, 1, size=39)
+        random_latent = np.random.normal(0, 1, size=11)
         gen_vaes.append( model.decode(torch.Tensor(random_latent)))
         gen_aes.append( model_AE.decode(torch.Tensor(random_latent)))
 
