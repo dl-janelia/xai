@@ -130,9 +130,23 @@ fig.colorbar(im, ax=axs, orientation='vertical', label="gray value")
 # Here, we set the `batch_size` for both the train and test loader, and set `shuffle` for training only.
 
 # %%
+# if torch.cuda.is_available():
+#     device = torch.device("cuda")
+# elif torch.backends.mps.is_available():
+#     device = torch.device("mps")
+# else:
+import torch
+device = torch.device("cpu")
+    
+print(f"Using device: {device}")
+
+# %%
+
+batch_size = 8
+
 from torch.utils.data import DataLoader
-train_loader = DataLoader(train_mnist, batch_size=8, shuffle=True)
-test_loader = DataLoader(test_mnist, batch_size=8, shuffle=False)
+train_loader = DataLoader(train_mnist, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(test_mnist, batch_size=batch_size, shuffle=False)
 
 # %% [markdown]
 # Have a look at the shape of what the dataset iterator and the dataloader iterator differ:
@@ -238,19 +252,10 @@ class VariationalAutoEncoder(nn.Module):
 
     def encode(self, x):
         b  = x.shape[0] # batchsize
-        out = self.encoder(x.reshape(b, -1))
+        x_flat = x.reshape(b, -1) # (8, 1, 28, 28) → (8, 784)
+        out = self.encoder(x_flat)
         mu, logvar = torch.chunk(out, 2, dim = 1)
         return mu, logvar
-    
-    def decode(self, z):
-        out = self.decoder(z)
-        return out.reshape(-1, 1, self.w, self.h) # this is hard-coding one channel 
-    
-    def forward(self, x):
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        xx = self.decode(z)
-        return xx, z, mu, logvar
     
     @staticmethod
     def reparameterize(mean, logvar):
@@ -258,8 +263,18 @@ class VariationalAutoEncoder(nn.Module):
         epsilon = torch.randn_like(std)
         return epsilon * std + mean
 
+    def decode(self, z):
+        out = self.decoder(z) 
+        xx = out.reshape(-1, 1, self.w, self.h) # (8, 784) → (8, 1, 28, 28)
+        return xx
+    
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        xx = self.decode(z)
+        return xx, z, mu, logvar
 # %% [markdown]
-# ### Part A.5.3: The loss function
+# ### Part A.5.3: The loss functions
 # To train, we compute a Binary Cross Entropy "reconstruction" loss
 # %%
 rec_loss = nn.BCELoss(reduction="sum")
@@ -282,7 +297,7 @@ def loss(rec, kl, beta = 0.001):
 # %%
 data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
-model = VariationalAutoEncoder(w, h, latent_dim=11)
+model = VariationalAutoEncoder(w, h, latent_dim=11).to(device)
 
 # %% [markdown]
 # We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
@@ -291,26 +306,35 @@ model = VariationalAutoEncoder(w, h, latent_dim=11)
 from torch.optim import Adam
 optimizer = Adam(model.parameters(), lr=0.0001)
 
-
 # %% [markdown]
 # #### Part A.5.4.2: The training "loop"
 # To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction, observe how close to the original data the reconstruction is using a loss function, and use that observation to inform the model optimisation. Performing these steps going once through all the training data is what is referred to as a training "epoch". We then loop this process over for a desired arbitrary number of training epochs.
 #
 # Below is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs. Note the `epoch_losses` list which will accumulate the average epoch losses as training occurs. We will use it to visualise the loss later.
 # %%
-def train_epoch(model, loader, optimizer, loss, beta = 0.001):
+from tqdm.auto import tqdm
+from itertools import islice
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
+
+
+def train_epoch(model, loader, optimizer, loss, beta):
     model.train()
     running_rec_loss = 0.0
     running_kl_loss = 0.0
     running_loss = 0.0
+
     for x, _ in loader:
+        x = x.to(device)
         xx, _, mu, logvar = model(x)
         rec_l = rec_loss(xx, x)
         kl_l = kl_loss(mu, logvar)
         l = loss(rec_l, kl_l, beta = beta)
+
         optimizer.zero_grad()
         l.backward()
         optimizer.step()
+
         # Stats
         running_rec_loss += rec_l.item()
         running_kl_loss += kl_l.item()
@@ -319,43 +343,14 @@ def train_epoch(model, loader, optimizer, loss, beta = 0.001):
     avg_rec_loss = running_rec_loss / len(loader)
     avg_kl_loss = running_kl_loss / len(loader)
     avg_loss = running_loss / len(loader)
+
     return avg_rec_loss, avg_kl_loss, avg_loss
 
 
-# from tqdm.auto import tqdm
-# from itertools import islice
 
-# def train_epochs(n, model, loader, optimizer, loss, beta = 0.001):
-#     epoch_rec_losses = []
-#     epoch_kl_losses = []
-#     epoch_losses = []
+def plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses):
+    _, axes = plt.subplots(1, 3, figsize=(15, 3))
 
-#     pbar = tqdm(range(n))
-#     for epoch in pbar:
-#         # (Note: the `islice` is simply to train on only 100 elements and go faster. remove it for more data. The `tqdm` is just the progress bar.)
-#         fresh_loader_iter = iter(loader)
-#         sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True) # set disabled=False for batch-loading bar
-#         avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(model, sliced_loader, optimizer, loss, beta = beta)
-#         epoch_rec_losses.append(avg_rec_loss)
-#         epoch_kl_losses.append(avg_kl_loss)
-#         epoch_losses.append(avg_loss)
-#         # tqdm.write(f"Epoch {epoch+1} Complete. Avg Loss: {avg_loss:.4f}")
-#         pbar.set_postfix(
-#             loss=f"{avg_loss:.4f}",
-#             rec=f"{avg_rec_loss:.4f}",
-#             kl=f"{avg_kl_loss:.4f}"
-#         )
-
-#     return {"loss": epoch_losses, "rec": epoch_rec_losses, "kl": epoch_kl_losses}
-
-# %%
-from tqdm.auto import tqdm
-from itertools import islice
-from IPython.display import clear_output
-import matplotlib.pyplot as plt
-
-def plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses, epoch, n):
-    fig, axes = plt.subplots(1, 3, figsize=(15, 3))
     for ax, values, title in zip(
         axes,
         [epoch_losses, epoch_rec_losses, epoch_kl_losses],
@@ -365,11 +360,12 @@ def plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses, epoch, n):
         ax.set_title(f"{title}: {values[-1]:.4f}")
         ax.set_xlabel("Epoch")
         ax.grid(True, linestyle="--", alpha=0.6)
+
     plt.tight_layout()
     plt.show()
 
 
-def train_epochs(n, model, loader, optimizer, loss, beta=0.001, plot_every=10):
+def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
     epoch_rec_losses = []
     epoch_kl_losses = []
     epoch_losses = []
@@ -387,18 +383,13 @@ def train_epochs(n, model, loader, optimizer, loss, beta=0.001, plot_every=10):
         if (epoch + 1) % plot_every == 0:
             clear_output(wait=True)
             print(f"Epoch {epoch+1}/{n} | loss={avg_loss:.4f} | rec={avg_rec_loss:.4f} | kl={avg_kl_loss:.4f}")
-            plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses, epoch, n)
+            plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses)
 
     return {"loss": epoch_losses, "rec": epoch_rec_losses, "kl": epoch_kl_losses}
 
 
-# %%
-def reset_model(latent_dim = w*h//10):
-    model = VariationalAutoEncoder(w, h, latent_dim=latent_dim)  # fresh weights
-    optimizer = Adam(model.parameters(), lr=0.0001)         # fresh optimizer
-    epoch_rec_losses, epoch_kl_losses, epoch_losses = [], [], []  # fresh history
-    return model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses
-
+# %% [markdown]
+# ## Train the model
 
 # %% [markdown]
 # We can now train the model. Let's do this for one epoch.
@@ -440,6 +431,7 @@ def view_test_sample(model, loader):
     model.eval()
     with torch.no_grad():
         images, _ = next(iter(loader))
+        images = images.to(device)
         recon, _, _, _ = model(images)
     show_recon(images, recon)
 
@@ -459,13 +451,16 @@ train_epochs(10, model, train_loader, optimizer, loss, beta = 0)
 view_test_sample(model, test_loader)
 
 # %% [markdown]
+# ## Train a model for 1000 Epochs
+
+# %% [markdown]
 # Looking better, but clearly we need to train more. Let's start a new model from scratch and train it for 1000 epochs
 # * Instantiate a new autoencoder model and name it `model0`
 # * Instantiate a new optimizer (like above)
 # * Train your new model for 1000 epochs 
 
 # %%
-model0 = VariationalAutoEncoder(w, h, latent_dim = 11)  # fresh weights
+model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
 
@@ -475,9 +470,12 @@ losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = 0)
 # %%
 view_test_sample(model0, test_loader)
 
+# %% [markdown]
+# Reconstructed images should now look better. 
+
 # %%
 # beta 0 
-model1 = VariationalAutoEncoder(w, h, latent_dim=11)
+model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = 1)
@@ -537,108 +535,51 @@ def get_latent_features(model, loader):
 
     with torch.no_grad():
         for x, lbl in loader:
+            x = x.to(device)
             mu, logvar = model.encode(x)
             latents.append(mu.cpu())
             labels.append(lbl)
-    return torch.cat(latents, dim=0), torch.cat(labels, dim=0)
+
+    mus = torch.cat(latents, dim=0) 
+    lbls = torch.cat(labels, dim=0)
+
+    mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
+    return mus, lbls, mu_mean
+
 
 
 # %%
-from sklearn.manifold import TSNE
+# pip install umap-learn
+from umap import UMAP
 from matplotlib.colors import ListedColormap
 
-def run_tsne(latents, n_components=2, random_state=42, init = 'pca',  learning_rate='auto', means = None):
-    tsne = TSNE(n_components=n_components, random_state=random_state, init=init, learning_rate=learning_rate)
-    if means is not None: 
-        combined = np.concatenate([latents.numpy(), means.numpy()])
-        combined_2d = tsne.fit_transform(combined)
-
-        # Split back into latents and means
-        z_2d = combined_2d[:len(latents)]                    # (10000, 2)
-        z_2d_means = combined_2d[len(latents):]              # (10, 2)
-        return z_2d, z_2d_means
-    
-    z_2d = tsne.fit_transform(latents.numpy())
-    return z_2d
-
-def plot_tsne( z_2d, labels
-             , cmap='tab10', alpha=0.6, s=10, centers = None, center_labels = None):
-
-
-    ticks = np.unique(labels)
-
-    base_cmap = plt.get_cmap(cmap)
-    # Resample to n levels
-    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) +1))
-    print(len(colors_n))
-    new_cmap = ListedColormap(colors_n)
-
-    plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(z_2d[:, 0], z_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
-    plt.colorbar(scatter, ticks=ticks)
-    #plt.title("t-SNE visualization of MNIST Latent Space")
-
-
-    if centers is not None: 
-        for i, label in enumerate(center_labels):
-            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor = "white", size = 'large')
-
-        plt.scatter(centers[:,0], centers [:,1], s = 50, marker = "X", c = "k", zorder = 10000)       
-    plt.axis('off')
-
-
-# %%
-mus_ae, lbls_ae = get_latent_features(model0, tqdm(test_loader))
-mu_mean_ae = torch.stack([mus_ae[lbls_ae == i].mean(dim=0) for i in range(10)])
-z_2d_ae, z_2d_means_ae = run_tsne(mus_ae, means = mu_mean_ae)
-
-
-mus, lbls = get_latent_features(model1, tqdm(test_loader))
-mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
-z_2d, z_2d_means = run_tsne(mus, means = mu_mean)
-
-plot_tsne(z_2d_ae, lbls_ae, cmap = "tab10", centers = z_2d_means_ae, center_labels=range(10))
-plot_tsne(z_2d, lbls, cmap = "tab10", centers = z_2d_means, center_labels=range(10))
-
-# %%
-from sklearn.decomposition import PCA
-from matplotlib.colors import ListedColormap
-
-def run_pca(latents, n_components=2, random_state=42, means=None):
-    pca = PCA(n_components=n_components, random_state=random_state)
-    
+def run_umap(latents, n_components=2, random_state=42, n_neighbors=15, min_dist=0.1, means=None):
+    reducer = UMAP(n_components=n_components, random_state=random_state,
+                   n_neighbors=n_neighbors, min_dist=min_dist)
     if means is not None:
         combined = np.concatenate([latents.numpy(), means.numpy()])
-        combined_2d = pca.fit_transform(combined)
+        combined_2d = reducer.fit_transform(combined)
 
         # Split back into latents and means
-        z_2d = combined_2d[:len(latents)]        # (10000, 2)
-        z_2d_means = combined_2d[len(latents):]  # (10, 2)
-        return z_2d, z_2d_means, pca.explained_variance_ratio_
+        mu_2d = combined_2d[:len(latents)]        # (10000, 2)
+        mu_mean_2d = combined_2d[len(latents):]  # (10, 2)
+        return mu_2d, mu_mean_2d
 
-    z_2d = pca.fit_transform(latents.numpy())
-    return z_2d, pca.explained_variance_ratio_
+    mu_2d = reducer.fit_transform(latents.numpy())
+    return mu_2d
 
 
-def plot_pca(z_2d, labels, explained_variance_ratio,
-             cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
+def plot_umap(mu_2d, labels,
+              cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
 
     ticks = np.unique(labels)
-
     base_cmap = plt.get_cmap(cmap)
     colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) + 1))
     new_cmap = ListedColormap(colors_n)
 
-    total_var = explained_variance_ratio.sum() * 100
-
     plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(z_2d[:, 0], z_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
+    scatter = plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
     plt.colorbar(scatter, ticks=ticks)
-    plt.title(
-        f"PC1: {explained_variance_ratio[0]*100:.1f}%  |  "
-        f"PC2: {explained_variance_ratio[1]*100:.1f}%  |  "
-        f"Total: {total_var:.1f}% variance explained"
-    )
 
     if centers is not None:
         for i, label in enumerate(center_labels):
@@ -648,49 +589,82 @@ def plot_pca(z_2d, labels, explained_variance_ratio,
 
 
 # %%
-z_2d_ae, z_2d_means_ae, evr_ae = run_pca(mus_ae, means=mu_mean_ae)
-z_2d, z_2d_means, evr = run_pca(mus, means=mu_mean)
+import numpy as np
 
-plot_pca(z_2d_ae, lbls_ae, evr_ae, cmap="tab10", centers=z_2d_means_ae, center_labels=range(10))
-plot_pca(z_2d, lbls, evr, cmap="tab10", centers=z_2d_means, center_labels=range(10))
+#get all latent features
+mus0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
+mus1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
+
+
+print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 
 # %%
-im = plt.imshow(mu_mean_ae.numpy(), cmap =  "bwr")
+ae_std  = mus0.std(dim=0).mean().item()
+vae_std = mus1.std(dim=0).mean().item()
+
+print(f"VAE (β=1) avg latent std ≈ {vae_std:.2f}  ← close to 1.0 ✓")
+plt.scatter(mus0[:,0], mus0[:,1], c = lbls0, s = 1, label = lbls0)
+plt.title(f"AE  (β=0) avg latent std ≈ {ae_std:.2f}  ← much wider than N(0,1)")
+
+plt.legend()
+plt.show()
+plt.scatter(mus1[:,0], mus1[:,1], c = lbls1, s = 1, label = lbls1)
+plt.legend()
+
+# %%
+mus0.mean(axis = 0)
+mus0.std(axis = 0)
+
+# %%
+# Show the *mean* mu for each label
+
+im = plt.imshow(mu_mean1.numpy(), cmap =  "bwr")
 plt.colorbar(im)
-plt.xlabel("latent dim")
-plt.ylabel("label")
+plt.xlabel("mean latent dimensions")
+plt.ylabel("MNIST label")
 plt.yticks([0,1,2,3,4,5,6,7,8,9])
 plt.show()
 
-im = plt.imshow(mu_mean.numpy(), cmap =  "bwr")
-plt.colorbar(im)
-plt.xlabel("latent dim")
-plt.ylabel("label")
-plt.yticks([0,1,2,3,4,5,6,7,8,9])
-plt.show()
+# %% [markdown]
+# Show UMAP of latent space
+
+# %%
+mu_2d_0, mu_means_2d_0 = run_umap(mus0, means = mu_mean0)
+plot_umap(mu_2d_0, lbls0, cmap = "tab10", centers = mu_means_2d_0, center_labels=range(10))
+
+# %% [markdown]
+# Looks well separated, but is it really? 
 
 # %%
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.model_selection import train_test_split
 
-# Fit a logistic regression on the latent space
-def logreg(mus, lbls):
+def logreg(mus, lbls, test_size=0.2, random_state=42):
+
+    mus_train, mus_val, lbls_train, lbls_val = train_test_split(
+        mus.numpy(), lbls.numpy(),
+        test_size=test_size,
+        random_state=random_state,
+        stratify=lbls.numpy()  # ensures each split has the same class proportions
+    )
+
+    # Fit only on training data
     clf = LogisticRegression(max_iter=1000)
-    clf.fit(mus.numpy(), lbls.numpy())
+    clf.fit(mus_train, lbls_train)
 
-    # Predict and compute accuracy
-    preds = clf.predict(mus.numpy())
-    accuracy = accuracy_score(lbls.numpy(), preds)
+    # Evaluate only on validation data
+    preds_val = clf.predict(mus_val)
+    print(mus_val.shape)
+    accuracy = accuracy_score(lbls_val, preds_val)
 
-    # Compute confusion matrix
-    unique_lbls = sorted(set(lbls.numpy()))
-    conf_m = confusion_matrix(lbls.numpy(), preds, labels = unique_lbls)
+    unique_lbls = sorted(set(lbls_val))
+    conf_m = confusion_matrix(lbls_val, preds_val, labels=unique_lbls)
 
-    return accuracy, unique_lbls, conf_m
+    return accuracy, unique_lbls, conf_m, clf
 
-
-accuracy, unique_lbls, conf_m = logreg(mus, lbls)
-accuracy_ae, unique_lbls_ae, conf_m_ae = logreg(mus_ae, lbls_ae)
+accuracy0, unique_lbls0, conf_m0, clf0 = logreg(mus0, lbls0)
+accuracy1, unique_lbls1, conf_m1, clf1 = logreg(mus1, lbls1)
 
 
 # %% [markdown]
@@ -712,95 +686,97 @@ def confmatrix(conf_m, accuracy, unique_lbls):
     ax.set_yticks(unique_lbls);
 
 
-confmatrix(conf_m, accuracy, unique_lbls)
-confmatrix(conf_m_ae, accuracy_ae, unique_lbls_ae)
+confmatrix(conf_m0, accuracy0, unique_lbls0)
+confmatrix(conf_m1, accuracy1, unique_lbls1)
+
 
 # %% [markdown]
 # ### Sample from the latent space
 
-# %%
-# Plot average latent vectors 
-fig, ax = plt.subplots(1, 10, figsize = (20, 10))
-with torch.no_grad():
-    for i in range(10):
-        gen = model.decode(mu_mean[i])
-
-        ax[i].imshow(gen.detach().squeeze().numpy())
-        ax[i].set_title(f"Mean for {i}")
-plt.tight_layout()
+# %% [markdown]
+# Sample using mean vectors
+#
 
 # %%
 # Plot average latent vectors 
-fig, ax = plt.subplots(1, 10, figsize = (20, 10))
-with torch.no_grad():
-    for i in range(10):
-        gen = model_AE.decode(mu_mean_ae[i])
 
-        ax[i].imshow(gen.detach().squeeze())
-        ax[i].set_title(f"Mean for {i}")
-plt.tight_layout();
+def gen_mean_numbers(model, mu_mean, title):
+    fig, ax = plt.subplots(1, 10, figsize = (20, 4))
+    with torch.no_grad():
+        for i in range(10):
+            gen = model.decode(mu_mean[i].to(device))
 
-# %%
-# interpolate between 0 and 3 
-digit_a = 3
-digit_b = 9
-mu_a = mu_mean[digit_a]
-mu_b = mu_mean[digit_b]
+            ax[i].imshow(gen.detach().cpu().squeeze().numpy())
+            ax[i].set_title(f"Mean for {i}")
+    fig.suptitle(title)
+    plt.tight_layout()
 
-steps = 8
-fig, ax = plt.subplots(1, steps, figsize = (20, 10))
 
-with torch.no_grad():
-    for i, weight_b in enumerate(np.linspace(0, 1, steps)):
-        weight_a = 1 - weight_b
-        trajectory = weight_a * mu_a + weight_b * mu_b
-        gen = model.decode(trajectory)
-
-        ax[i].imshow(gen.detach().squeeze().numpy())
-        ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
-plt.tight_layout()
+gen_mean_numbers(model0, mu_mean0, title="Model 0")
 
 
 # %%
 # interpolate between 0 and 3 
-digit_a = 3
-digit_b = 9
-mu_a = torch.Tensor(mu_mean_ae[digit_a])
-mu_b = torch.Tensor(mu_mean_ae[digit_b])
+def interpolate(digit_a, digit_b, mu_mean, model):
 
-steps = 8
-fig, ax = plt.subplots(1, steps, figsize = (20, 10))
+    mu_a = mu_mean[digit_a]
+    mu_b = mu_mean[digit_b]
 
-with torch.no_grad():
-    for i, weight_b in enumerate(np.linspace(0, 1, steps)):
-        weight_a = 1 - weight_b
-        trajectory = weight_a * mu_a + weight_b * mu_b
-        gen = model_AE.decode(trajectory)
+    steps = 8
+    fig, ax = plt.subplots(1, steps, figsize = (20, 10))
 
-        ax[i].imshow(gen.detach().squeeze())
-        ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
-plt.tight_layout()
+    with torch.no_grad():
+        for i, weight_b in enumerate(np.linspace(0, 1, steps)):
+            weight_a = 1 - weight_b
+            trajectory = weight_a * mu_a + weight_b * mu_b
+            trajectory = trajectory.to(device)
+            gen = model.decode(trajectory)
+
+            ax[i].imshow(gen.detach().cpu().squeeze().numpy())
+            ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
+    plt.tight_layout()
+
+interpolate(0, 3, mu_mean0, model0)
 
 # %%
+n = 10000
+latent_dims = 2
 
-gen_vaes = []
-gen_aes = []
+random_latent = np.random.normal(0, 1, size=(n, latent_dims))
 
-n = 10
+
 with torch.no_grad():
-    for i in range(n):
-        random_latent = np.random.normal(0, 1, size=11)
-        gen_vaes.append( model.decode(torch.Tensor(random_latent)))
-        gen_aes.append( model_AE.decode(torch.Tensor(random_latent)))
 
-fig, ax = plt.subplots(2, n, figsize = (20, 10))
-for i in range(n):
-    ax[0, i].imshow(gen_vaes[i].detach().squeeze(), cmap = "grey")
-    ax[1, i].imshow(gen_aes[i].detach().squeeze(), cmap = "grey")
+    gen_0 = model0.decode(torch.Tensor(random_latent))
+    gen_labels_0 = clf0.predict(random_latent)
+
+
+    gen_1 = model1.decode(torch.Tensor(random_latent))
+    gen_labels_1 = clf1.predict(random_latent)
+
+
+n_show = 10
+fig, ax = plt.subplots(2, n_show + 1, figsize = (20, 7))
+for i in range(n_show):
+    ax[0, i].imshow(gen_0[i].detach().squeeze(), cmap = "grey")
+    ax[0, i].set_title(gen_labels_0[i])
+
+    ax[1, i].imshow(gen_1[i].detach().squeeze(), cmap = "grey")
+    ax[1, i].set_title(gen_labels_1[i])
+
+
+for row, gen, labels, title in [
+    (0, gen_0, gen_labels_0, "(β=0)"),
+    (1, gen_1, gen_labels_1, "(β=1)"),
+]:
+    for i in range(n_show):
+        ax[row, i].imshow(gen[i].detach().squeeze(), cmap="gray")
+        ax[row, i].set_title(labels[i])
+
+    ax[row, n_show].bar(range(10), np.bincount(labels, minlength=10))
+    ax[row, n_show].set(xticks=range(10), xlabel="Digit", title=title)
 
 plt.tight_layout()
-
-
 
 # %% [markdown]
 # ## Part A.6: Contrastive learning
