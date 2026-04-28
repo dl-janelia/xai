@@ -460,6 +460,7 @@ view_test_sample(model, test_loader)
 # * Train your new model for 1000 epochs 
 
 # %%
+
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
@@ -531,6 +532,7 @@ plot_losses_compare(
 def get_latent_features(model, loader):
     model.eval()
     latents = []
+    logvars = []
     labels = []
 
     with torch.no_grad():
@@ -538,13 +540,15 @@ def get_latent_features(model, loader):
             x = x.to(device)
             mu, logvar = model.encode(x)
             latents.append(mu.cpu())
+            logvars.append(logvar.cpu())
             labels.append(lbl)
 
     mus = torch.cat(latents, dim=0) 
+    logvars = torch.cat(logvars, dim=0)
     lbls = torch.cat(labels, dim=0)
 
     mu_mean = torch.stack([mus[lbls == i].mean(dim=0) for i in range(10)])
-    return mus, lbls, mu_mean
+    return mus, logvars, lbls, mu_mean
 
 
 
@@ -592,8 +596,8 @@ def plot_umap(mu_2d, labels,
 import numpy as np
 
 #get all latent features
-mus0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
-mus1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
+mus0, logvars0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
+mus1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
 
 
 print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
@@ -601,19 +605,65 @@ print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 # %%
 ae_std  = mus0.std(dim=0).mean().item()
 vae_std = mus1.std(dim=0).mean().item()
+rnd_normal = np.random.normal(0, 1, size=(10000, 2))
 
 print(f"VAE (β=1) avg latent std ≈ {vae_std:.2f}  ← close to 1.0 ✓")
 plt.scatter(mus0[:,0], mus0[:,1], c = lbls0, s = 1, label = lbls0)
 plt.title(f"AE  (β=0) avg latent std ≈ {ae_std:.2f}  ← much wider than N(0,1)")
+plt.scatter(rnd_normal[:,0], rnd_normal[:,1])
+plt.axis("equal")
 
-plt.legend()
 plt.show()
 plt.scatter(mus1[:,0], mus1[:,1], c = lbls1, s = 1, label = lbls1)
 plt.legend()
 
+# plt.show()
+plt.scatter(rnd_normal[:,0], rnd_normal[:,1])
+plt.axis("equal")
+
+
 # %%
-mus0.mean(axis = 0)
-mus0.std(axis = 0)
+def sample_mixture(mus, logvars):
+    """Sample one point from each N(mu_i, exp(logvar_i / 2))"""
+    stds = torch.exp(logvars / 2)
+    eps  = torch.randn_like(mus)
+    return (mus + eps * stds).numpy()
+
+ae_std  = mus0.std(dim=0).mean().item()
+vae_std = mus1.std(dim=0).mean().item()
+
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+for ax, mus, logvars, lbls, title in [
+    (axes[0], mus0, logvars0, lbls0, f"AE  (β=0)  std ≈ {ae_std:.2f}"),
+    (axes[1], mus1, logvars1, lbls1, f"VAE (β=1)  std ≈ {vae_std:.2f}  ✓"),
+]:
+    samples = sample_mixture(mus, logvars)
+    ax.scatter(samples[:, 0], samples[:, 1], c=lbls, cmap="tab10", s=1, alpha=0.3)
+    ax.set_title(title)
+    ax.set_xlabel("z[0]")
+    ax.set_ylabel("z[1]")
+
+# Prior N(0,1) for comparison
+rnd_normal = np.random.normal(0, 1, size=(8, 2))
+axes[2].scatter(rnd_normal[:, 0], rnd_normal[:, 1], s=1, alpha=0.3, color="gray")
+axes[2].set_title("Prior  N(0, 1)")
+axes[2].set_xlabel("z[0]")
+axes[2].set_ylabel("z[1]")
+
+plt.suptitle(
+    "Aggregate posterior q(z|x) = mixture of Gaussians\n"
+    "VAE (β=1) matches the prior N(0,1) — AE (β=0) does not",
+    fontsize=12,
+)
+plt.tight_layout()
+plt.show()
+
+
+
+
+# %%
+logvars0
 
 # %%
 # Show the *mean* mu for each label
@@ -740,7 +790,7 @@ interpolate(0, 3, mu_mean0, model0)
 
 # %%
 n = 10000
-latent_dims = 2
+latent_dims = 3
 
 random_latent = np.random.normal(0, 1, size=(n, latent_dims))
 
