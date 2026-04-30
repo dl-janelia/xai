@@ -22,23 +22,23 @@
 # Representation learning has been gaining significant attention over the past years,
 # driven by the rise of new architectures and the growing need in biology to extract meaningful structured information
 # from increasingly high-dimensional and complex data. Yet as these models become more capable, understanding what they are actually learning becomes
-# just as important as their predictive performance, and that is precisely the role of explainable AI plays.
+# just as important as their predictive performance, and that is precisely the role of explainable AI.
 #
 # Goal of the exercises
 #
 # The goal of this exercise is to first build an understanding of what representation learning is,
-# what we mean by a "representation" in that context, and what makes a representation good or useful.
+# what we mean by a "representation" in that context, and what makes a representation good or useful.  
 # From there, we will explore what architectures can be used to obtain these representations, and how we can evaluate
 # the quality of the obtained representations.  The second half of the exercise shifts focus to Explainable AI (XAI),
 # where the goal is to learn how to probe what a pre-trained classifier has learned about the data it was trained on.
 #
-# In part A, we will be building two models from scratch.....
+# In part A, we will be building models for representation learning 
 #
 # We will:
-# 1. text
-# 2.
-# 3.
-# 4.
+# 1. Build and train a variational autoencoder (VAE)
+# 2. Visualize and compare the latent space learned under different model parameters
+# 3. Evaluate representation quality 
+# 4. Explore the generative properties of VAEs. 
 #
 # In part B, we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
 # Unlike regular MNIST, our dataset is classified not by number, but by color!
@@ -56,8 +56,21 @@
 # Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix-Romero, Ben Salmon and Albert Dominguez.
 # Part B was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
 # Part A has been inspired by multiple discussions between Virginie Uhlhmann, Alex Krull, Martin Weigert,
-# Albert Dominguez, Ed Hirata and Anna Foix-Romero.
+# Albert Dominguez, Ed Hirata and Anna Foix-Romero. 
 #
+#
+# ### AI Statement
+#
+# Portions of this notebook were developed with the assistance of **Claude 4.6** (Anthropic),
+# accessed via the **Harvard AI Sandbox**. Prompts and responses are not used to train external models and data does not leave the
+# university's controlled infrastructure.
+#
+# Specifically, Claude was used for:
+# - **Inspiration and structure** of explanatory markdown text 
+# - **Debugging and refinement** of plotting and training code
+# - **Drafting** of reusable helper functions
+#
+# All AI-assisted content was reviewed, edited, and validated by the notebook authors.
 # %% [markdown]
 # <div class="alert alert-danger">
 # Set your python kernel to <code>07_xai</code>
@@ -65,13 +78,45 @@
 #
 # %% [markdown]
 # # PART A: Representation learning
-# ## Part A.1: What is a "representation" and why is that useful?
-# ## Part A.2: What does it mean "a good representation"?
-# ## Part A.3: Unsupervised learning
+# ## What is a "representation" and why is that useful?
+# A representation is a mapping from raw data to a structured, typically lower-dimensional space, called latent space, that ideally captures meaningful features of the data.  
 #
-# ## Part A.4: General set-up
+# Representations  
+# - Can compress the data 
+# - Ideally learn meaningful features and discard noise and redundancy 
+# - Enable classification, clustering, and data generation 
+# - Aid interpretability 
+#
+# ## What does it mean "a good representation"?
+# Good representations are compact: 
+# Later, we will see example images of MNIST – 28 x 28 images of hand-written digits on dark background.  
+# We can view each image as existing in an 28 x 28 = 784 - dimensional space. However, most of the image carries irrelevant information. 
+# For instance, most pixels belong to the dark background that does not contain infromation about the imaged digit.  
+# By keeping a representation compact (but not too compact!), we force the model to discard irrelevant information. 
+#
+# Smooth and continuous 
+# Small changes in the input should lead to small changes in the representation. There should be no "gaps" in the representation.  
+# This property makes it possible to generate new data from the representation, as each location in the latent space contains meaningful information.  
+#
+# Structured 
+# Similar inputs should be mapped to close-by locations in latent space, whereas dissimilar inputs should be distant to each other in latent space. 
+# This means that clusters present in the input, should also appear in latent space. 
+#
+# Disentangled 
+# Ideally, each dimension of the latent space should capture a different feature of the input-image. For example, one dimension could capture the tilt (left-right) of handwritten digits, 
+# another the identity of the digits, yet another the boldness of the text.  
+#
+# ## Unsupervised learning
+# The models trained in part A are an example of unsupervised learning. We do not provide labels --- i.e. the model trains on images of hand-written digits, but does not know the true identity (labels 0 - 9) of each image. 
+# This means the model is learning structural information that is intrinsic to the data. It does so by fulfilling two training objectives: 
+# - Reconstruction: Reconstruction-loss incentivises the model to generate a reconstructed version of an input-image from the latent space. This means that the latent space needs to ideally carry information to allow for a close reconstruction.  
+# - Constraints on the latent space: We can impose structural constraints on the latent space, ensuring previously discussed smoothness and continuity. 
+#
+# Unsupervised learning is valuable in applications where labels are costly to generate or entirely unknown. 
+#
+# ## Part A.1: General set-up
 # In this part of the notebook, we will load the same dataset as in the previous exercise. 
-# ### Part A.4.1: The MNIST dataset
+# ### The MNIST dataset
 # MNIST is a machine learning benchmark dataset:
 # * **70,000** grayscale images of handwritten digits 0 - 9.  
 # * Of which are **60,000** training images and **10,000** testing images. 
@@ -175,12 +220,12 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # | Batch dimension | ❌ | ✅ (size = `batch_size`) |
 
 # %% [markdown]
-# ### Part A.5: Variational autoencoders
+# ### Part A.2: Variational autoencoders
 # A variational autoencoder is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.  
 # The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.  
 # In our case, we convert `28 * 28 = 784` pixel images into a few core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
-# #### Part A.5.1: An MLP class for encoder and decoder
+# #### Part A.2.1: An MLP class for encoder and decoder
 # We chose a simple MLP (multi-layer perceptron) as the architecture to back both the encoder and the decoder.  
 # MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU) to learn. 
 
@@ -210,7 +255,7 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 # %% [markdown]
-# #### Part A.5.2: The VariationalAutoEncoder class
+# #### Part A.2.2: The VariationalAutoEncoder class
 #
 # Here we provide a simple VariationalAutoEncoder class making use of our previously defined MLP class for both its encoder and decoder.  
 # Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
@@ -274,7 +319,7 @@ class VariationalAutoEncoder(nn.Module):
         xx = self.decode(z)
         return xx, z, mu, logvar
 # %% [markdown]
-# ### Part A.5.3: The loss functions
+# ### Part A.2.3: The loss functions
 # To train, we compute a Binary Cross Entropy "reconstruction" loss
 # %%
 rec_loss = nn.BCELoss(reduction="sum")
@@ -283,21 +328,21 @@ def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
 
-def loss(rec, kl, beta = 0.001):
+def loss(rec, kl, beta):
     return rec + beta * kl
 
 
 # %% [markdown]
-# ### Part A.5.4: Training
+# ### Part A.2.4: Training
 # Now we get to create and train our model on the MNIST dataset.
 #
-# #### Part A.5.4.1: Model instance and optimizer
+# #### Part A.2.4.1: Model instance and optimizer
 #
 # We first create an instance of our VariationalAutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate size, and chose a latent dimension size as well (here, we compress by 10 the total size of the image).
 # %%
 data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
-model = VariationalAutoEncoder(w, h, latent_dim=11).to(device)
+model = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 
 # %% [markdown]
 # We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
@@ -307,7 +352,7 @@ from torch.optim import Adam
 optimizer = Adam(model.parameters(), lr=0.0001)
 
 # %% [markdown]
-# #### Part A.5.4.2: The training "loop"
+# #### Part A.2.4.2: The training "loop"
 # To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction, observe how close to the original data the reconstruction is using a loss function, and use that observation to inform the model optimisation. Performing these steps going once through all the training data is what is referred to as a training "epoch". We then loop this process over for a desired arbitrary number of training epochs.
 #
 # Below is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs. Note the `epoch_losses` list which will accumulate the average epoch losses as training occurs. We will use it to visualise the loss later.
@@ -389,18 +434,118 @@ def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
 
 
 # %% [markdown]
-# ## Train the model
+# ### A.2.4.3 Train the model
 
 # %% [markdown]
-# We can now train the model. Let's do this for one epoch.
+# We can now train the model. Let's do this for 100 epochs.
 
 # %%
 # model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(1, model, train_loader, optimizer, loss, beta = 0);
+train_epochs(100, model, train_loader, optimizer, loss, beta = 1);
+
+# %% [markdown]
+# ### A.2.4.4. Inspect the trained model 
+# #### Get a test image
+# Let's inspect what each part of the model does.  
+# We will probe the model with one image.  
+# Let's get it from the `test_loader`:
+
+# %%
+x, _ = test_loader.dataset[0] 
+
+print(f"Image shape : {x.shape} --- B, Y, X") 
+
+plt.figure(figsize=(1,1))
+plt.imshow(x.squeeze(), cmap="Grays");
+
+# %% [markdown]
+# #### The encoder
+# Next, we pass the loaded image to the encoder, which returns `mu` and `logvar`.  
+# We set the latent space to have two dimensions --- so each `mu` and `logvar` have two entries. 
+#
+# Compare the sizes of x 
+
+# %%
+
+with torch.no_grad():
+    mu, logvar = model.encode(x.to(device))
+
+
+print(f"mu    : {mu}. Dimensions: {len(mu[0])}")
+print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
+
+# %% [markdown]
+# Task: the function .nbytes allows you to see the size of an array or tensor in bytes.  
+# Print the size of x.  
+# Compute the size of mu and the size of logvar. Print their sum.  
+# Which is bigger: the input image, or its latent space embedding?  
+
+# %%
+#Example: 
+print(np.zeros(1).nbytes)
+
+print(f"Input image: {x.nbytes} bytes")
+print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
+
+# %% [markdown]
+# #### Sample
+# Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$  
+# The `reparametrize` function allows for this sampling without blocking backpropagation.  
+# Note how `z` is different for each draw: 
+
+# %%
+with torch.no_grad():
+    z_1 = model.reparameterize(mu, logvar)
+    z_2 = model.reparameterize(mu, logvar) # same mu, same logvar
+
+print(f"z_1: {z_1}, Dimensions: {len(z_1[0])}")
+print(f"z_2: {z_2}, Dimensions: {len(z_2[0])}")
+print("Are the two samples the same?", z_1 == z_2 )
 
 
 # %% [markdown]
-# Now let's look at what reconstructions look like at this stage. Below are a couple simple visualisation function to display original and reconstructed images together, and to query the model for a batch of reconstructions and display them using the first function.
+# #### The decoder
+# Next, we can decode `z_1` and `z_2`.  
+# The decoder reconstructs image `rec_1` from `z_1`, and image `rec_2` from `z_2`
+
+# %%
+
+with torch.no_grad():
+    rec_1 = model.decode(z_1).numpy().squeeze()
+    rec_2 = model.decode(z_2).numpy().squeeze()
+
+# %% [markdown]
+# Are the two reconstructed images the same?
+
+# %%
+fig, ax = plt.subplots(1, 4)
+
+im0 = ax[0].imshow(x.squeeze(), cmap= "Grays")
+ax[0].set_title("original")
+plt.colorbar(im0, shrink = 0.2)
+
+im0 = ax[1].imshow(rec_1, cmap= "Grays")
+ax[1].set_title("rec 1")
+plt.colorbar(im0, shrink = 0.2)
+
+im1 = ax[2].imshow(rec_2, cmap= "Grays")
+ax[2].set_title("rec 2")
+plt.colorbar(im1, shrink = 0.2)
+
+im2 = ax[3].imshow(rec_1 - rec_2, cmap= "Grays")
+ax[3].set_title("rec 1 - rec 2")
+plt.colorbar(im2, shrink = 0.2)
+
+plt.tight_layout()
+
+
+# %% [markdown]
+# Clearly not! VAEs are *probabilistic* models. 
+
+# %% [markdown]
+# #### Display mulitple reconstructions
+# Now let's look at what reconstructions look like for multiple images.  
+# Below are a couple simple visualisation function to display original and reconstructed images together, and to query the model for a batch of reconstructions and display them using the first function.
 
 # %%
 def show_recon(og, recon):
@@ -443,51 +588,60 @@ def view_test_sample(model, loader):
 view_test_sample(model, test_loader)
 
 # %% [markdown]
-# Not the most beautiful sight just yet... Let's train some more...
-
-# %%
-# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(10, model, train_loader, optimizer, loss, beta = 0)
-view_test_sample(model, test_loader)
+# Not great, not terrible... Let's train some more...
 
 # %% [markdown]
-# ## Train a model for 1000 Epochs
+# ### A 2.4.5 Train a model without regularized latent sapce
 
 # %% [markdown]
-# Looking better, but clearly we need to train more. Let's start a new model from scratch and train it for 1000 epochs
-# * Instantiate a new autoencoder model and name it `model0`
-# * Instantiate a new optimizer (like above)
-# * Train your new model for 1000 epochs 
+# Let's train our first "serious" model. 
+# * Instantiate a new variational autoencoder model and name it `model0`
+# * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space. 
+# * Instantiate a new optimizer 
+# * Pass `beta = 0`
+# * Train your new model for `epochs = 1000`
 
 # %%
 
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
+
 epochs = 1000
+beta = 0
+losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
-losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = 0)
-
+# %% [markdown]
+# Let's have a look at the results: 
 
 # %%
 view_test_sample(model0, test_loader)
 
 # %% [markdown]
 # Reconstructed images should now look better. 
+#
+# * Are you happy with the KL Loss?
+# * What can you do to make sure the KL Loss doesn't explode? 
+# * Change one variable in the code below to train a new model with better-behaved KL loss. 
+# * Why is it important that the KL Loss stays small? We will later on see an example, but take a moment to think about this.  
+#
+# Tips: 
+# * Have a look at the overall loss function definitions 
+# * Look at the order of magnitude of the reconstruction loss and KL loss to decide on the value
 
 # %%
-# beta 0 
+# beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = 1)
+beta = 10
+losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
 view_test_sample(model1, test_loader)
 
 
 # %% [markdown]
-# Not bad :) Let's have a look at that loss.
-# Below is a simple function to plot it from the list we have accumulated in `epoch_losses` as we've trained.
+# Let's compare the losses: 
 
 # %%
 def plot_losses_compare(loss_dicts, labels, colors=None):
@@ -500,7 +654,7 @@ def plot_losses_compare(loss_dicts, labels, colors=None):
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']  # default matplotlib colors
 
     keys = list(loss_dicts[0].keys())
-    fig, axes = plt.subplots(1, len(keys), figsize=(6 * len(keys), 5))
+    fig, axes = plt.subplots(1, len(keys), figsize=(6 * len(keys), 3))
 
     for i, key in enumerate(keys):
         for loss_dict, label, color in zip(loss_dicts, labels, colors):
@@ -517,16 +671,25 @@ def plot_losses_compare(loss_dicts, labels, colors=None):
 
 plot_losses_compare(
     loss_dicts=[losses0, losses1],
-    labels=["Beta 0", "Beta 1"],
+    labels=["Beta 0", "Beta high"],
 )
 
 
 # %% [markdown]
-# We can clearly see it dropping as the training epochs happen and the model's parameters get optimised.
+# ### Part A.2.5: Apply the models to test images
+# #### Part A.2.5.1: Get latent space properties
 
 # %% [markdown]
-# ### Part A.5.5: Test
-# #### Part A.5.5.1: visualise input and reconstruction
+# Previously, we encoded one image into the latent space. Now we will encode the the entire test set. 
+# Below is a function that receives a model and a dataloader. 
+#
+# The function returns:
+# | Return value | Shape | Description |
+# |---|---|---|
+# | `mus` | `(10000, 2)` | latent mean for every test image |
+# | `logvars` | `(10000, 2)` | latent log-variance for every test image |
+# | `lbls` | `(10000,)` | digit label for every test image |
+# | `mu_mean` | `(10, 2)` | average latent position per digit class |
 
 # %%
 def get_latent_features(model, loader):
@@ -552,48 +715,10 @@ def get_latent_features(model, loader):
 
 
 
-# %%
-# pip install umap-learn
-from umap import UMAP
-from matplotlib.colors import ListedColormap
-
-def run_umap(latents, n_components=2, random_state=42, n_neighbors=15, min_dist=0.1, means=None):
-    reducer = UMAP(n_components=n_components, random_state=random_state,
-                   n_neighbors=n_neighbors, min_dist=min_dist)
-    if means is not None:
-        combined = np.concatenate([latents.numpy(), means.numpy()])
-        combined_2d = reducer.fit_transform(combined)
-
-        # Split back into latents and means
-        mu_2d = combined_2d[:len(latents)]        # (10000, 2)
-        mu_mean_2d = combined_2d[len(latents):]  # (10, 2)
-        return mu_2d, mu_mean_2d
-
-    mu_2d = reducer.fit_transform(latents.numpy())
-    return mu_2d
-
-
-def plot_umap(mu_2d, labels,
-              cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
-
-    ticks = np.unique(labels)
-    base_cmap = plt.get_cmap(cmap)
-    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) + 1))
-    new_cmap = ListedColormap(colors_n)
-
-    plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
-    plt.colorbar(scatter, ticks=ticks)
-
-    if centers is not None:
-        for i, label in enumerate(center_labels):
-            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor="white", size='large')
-        plt.scatter(centers[:, 0], centers[:, 1], s=50, marker="X", c="k", zorder=10000)
-    plt.axis('off')
-
+# %% [markdown]
+# Let's get these features for `model0` and `model1`: 
 
 # %%
-import numpy as np
 
 #get all latent features
 mus0, logvars0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
@@ -602,88 +727,139 @@ mus1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
 
 print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 
-# %%
-ae_std  = mus0.std(dim=0).mean().item()
-vae_std = mus1.std(dim=0).mean().item()
-rnd_normal = np.random.normal(0, 1, size=(10000, 2))
 
-print(f"VAE (β=1) avg latent std ≈ {vae_std:.2f}  ← close to 1.0 ✓")
-plt.scatter(mus0[:,0], mus0[:,1], c = lbls0, s = 1, label = lbls0)
-plt.title(f"AE  (β=0) avg latent std ≈ {ae_std:.2f}  ← much wider than N(0,1)")
-plt.scatter(rnd_normal[:,0], rnd_normal[:,1])
-plt.axis("equal")
-
-plt.show()
-plt.scatter(mus1[:,0], mus1[:,1], c = lbls1, s = 1, label = lbls1)
-plt.legend()
-
-# plt.show()
-plt.scatter(rnd_normal[:,0], rnd_normal[:,1])
-plt.axis("equal")
-
+# %% [markdown]
+# #### Part A.2.5.2: Visualize the latent space. 
 
 # %%
-def sample_mixture(mus, logvars):
-    """Sample one point from each N(mu_i, exp(logvar_i / 2))"""
-    stds = torch.exp(logvars / 2)
-    eps  = torch.randn_like(mus)
-    return (mus + eps * stds).numpy()
+def scatter_digits(ax, mus, lbls, mu_mean=None, alpha = 1):
+    """Colour-coded scatter, one series per digit so legend works."""
+    for d in range(10):
+        mask = lbls == d
+        ax.scatter(mus[mask, 0], mus[mask, 1],
+                   s=1, color=CMAP(d), label=str(d), rasterized=True, alpha = alpha)
 
-ae_std  = mus0.std(dim=0).mean().item()
-vae_std = mus1.std(dim=0).mean().item()
+    if mu_mean is not None:
+        for d in range(10):
+            # ── white halo behind the cross ───────────────────────────────
+            ax.scatter(mu_mean[d, 0], mu_mean[d, 1],
+                       s=220, color="white",
+                       marker="X",
+                       edgecolors="white", linewidths=3,
+                       zorder=9)
+            # ── coloured cross on top ─────────────────────────────────────
+            ax.scatter(mu_mean[d, 0], mu_mean[d, 1],
+                       s=80, color=CMAP(d),
+                       marker="X",
+                       edgecolors="black", linewidths=0.5,
+                       zorder=10,
+                       rasterized=False)
+            # ── digit label with bright background box ────────────────────
+            ax.annotate(str(d),
+                        xy=(mu_mean[d, 0], mu_mean[d, 1]),
+                        fontsize=8, fontweight="bold",
+                        ha="center", va="bottom",
+                        xytext=(0, 5), textcoords="offset points",
+                        zorder=11,
+                        bbox=dict(boxstyle="round,pad=0.15",
+                                  fc="white", ec="none", alpha=0.8))
 
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    ax.legend(title="Digit", markerscale=6,
+              ncol=2, fontsize=7, loc="best")
+    ax.set_aspect("equal")
 
-for ax, mus, logvars, lbls, title in [
-    (axes[0], mus0, logvars0, lbls0, f"AE  (β=0)  std ≈ {ae_std:.2f}"),
-    (axes[1], mus1, logvars1, lbls1, f"VAE (β=1)  std ≈ {vae_std:.2f}  ✓"),
-]:
-    samples = sample_mixture(mus, logvars)
-    ax.scatter(samples[:, 0], samples[:, 1], c=lbls, cmap="tab10", s=1, alpha=0.3)
-    ax.set_title(title)
-    ax.set_xlabel("z[0]")
-    ax.set_ylabel("z[1]")
+# ── build figure ───────────────────────────────────────────────────────────
+fig, axes = plt.subplots(2, 2, figsize=(13, 10))
 
-# Prior N(0,1) for comparison
-rnd_normal = np.random.normal(0, 1, size=(8, 2))
-axes[2].scatter(rnd_normal[:, 0], rnd_normal[:, 1], s=1, alpha=0.3, color="gray")
-axes[2].set_title("Prior  N(0, 1)")
-axes[2].set_xlabel("z[0]")
-axes[2].set_ylabel("z[1]")
+# ── top-left : AE (β=0) coloured by digit ─────────────────────────────────
+ax = axes[0, 0]
+scatter_digits(ax, mus0, lbls0, mu_mean=mu_mean0)   # ← means added
+ax.set_title(f"β=0 latent space", fontsize=11)
+ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
 
-plt.suptitle(
-    "Aggregate posterior q(z|x) = mixture of Gaussians\n"
-    "VAE (β=1) matches the prior N(0,1) — AE (β=0) does not",
-    fontsize=12,
-)
+# ── bottom-left : VAE (β=high) coloured by digit ──────────────────────────
+ax = axes[1, 0]
+scatter_digits(ax, mus1, lbls1, mu_mean=mu_mean1)   # ← means added
+ax.set_title(f"β=high latent space", fontsize=11)
+ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
+
+# ── top-right : AE (β=0) + N(0,1) overlay ─────────────────────────────────
+ax = axes[0, 1]
+scatter_with_normal(ax, mus0, lbls0)
+ax.set_title(f"β=0 vs N(0,1)", fontsize=11)
+ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
+
+# ── bottom-right : VAE (β=high) + N(0,1) overlay ──────────────────────────
+ax = axes[1, 1]
+scatter_with_normal(ax, mus1, lbls1)
+ax.set_title(f"β=high vs N(0,1)", fontsize=11)
+ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
+
+plt.suptitle("Latent-space comparison: β=0 vs β=high", fontsize=13, y=1.01)
 plt.tight_layout()
 plt.show()
 
 
-
-
 # %%
-logvars0
+def sample_from_latents(mus, logvars, n_samples=50):
+    """
+    For each (mu, logvar) pair, draw n_samples via the reparameterization trick.
+    Returns z_samples of shape (N * n_samples, 2).
+    """
+    N, latent_dim = mus.shape
+    # expand to (N, n_samples, latent_dim)
+    mu_exp     = mus.unsqueeze(1).expand(-1, n_samples, -1)
+    logvar_exp = logvars.unsqueeze(1).expand(-1, n_samples, -1)
 
-# %%
-# Show the *mean* mu for each label
+    std = torch.exp(logvar_exp / 2)
+    eps = torch.randn_like(std)
+    z   = mu_exp + eps * std                        # (N, n_samples, 2)
+    return z.reshape(N * n_samples, latent_dim)     # (N*n_samples, 2)
 
-im = plt.imshow(mu_mean1.numpy(), cmap =  "bwr")
-plt.colorbar(im)
-plt.xlabel("mean latent dimensions")
-plt.ylabel("MNIST label")
-plt.yticks([0,1,2,3,4,5,6,7,8,9])
+
+# ── sample ─────────────────────────────────────────────────────────────────
+n_samples = 100
+
+with torch.no_grad():
+    z_samples0 = sample_from_latents(mus0, logvars0, n_samples)
+    z_samples1 = sample_from_latents(mus1, logvars1, n_samples)
+
+# repeat each label n_samples times to match the expanded z array
+lbls0_rep = lbls0.repeat_interleave(n_samples)
+lbls1_rep = lbls1.repeat_interleave(n_samples)
+
+# ── plot ────────────────────────────────────────────────────────────────────
+fig, axes = plt.subplots(1, 2, figsize=(13, 7))
+
+ax = axes[0]
+scatter_digits(ax, z_samples0.numpy(), lbls0_rep, mu_mean=mu_mean0, alpha = 0.1)
+ax.set_title("β=0 — 100 samples per posterior", fontsize=11)
+ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
+
+ax = axes[1]
+scatter_digits(ax, z_samples1.numpy(), lbls1_rep, mu_mean=mu_mean1, alpha = 0.1)
+ax.set_title("β=high — 100 samples per posterior", fontsize=11)
+ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
+
+plt.suptitle("Sampled z", fontsize=13)
+plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# Show UMAP of latent space
-
-# %%
-mu_2d_0, mu_means_2d_0 = run_umap(mus0, means = mu_mean0)
-plot_umap(mu_2d_0, lbls0, cmap = "tab10", centers = mu_means_2d_0, center_labels=range(10))
+# Plotting the two latent dimensions shows how the numbers separate in latent space. 
 
 # %% [markdown]
 # Looks well separated, but is it really? 
+# Next, we train a logistic regression classifier on the latent space. 
+# This is asking how well a **simple linear model** can distinguish digits 
+# using only their latent coordinates (μ₁, μ₂) as features.
+#
+# If the clusters are truly well-separated, logistic regression — which can 
+# only draw straight decision boundaries — should achieve high accuracy.
+#
+# Note we're compressing the entire MNIST image (784 pixels) down to just 
+# **2 numbers**, so the accuracy also reflects how much class-relevant 
+# information is preserved in the bottleneck.
 
 # %%
 from sklearn.linear_model import LogisticRegression
@@ -705,7 +881,6 @@ def logreg(mus, lbls, test_size=0.2, random_state=42):
 
     # Evaluate only on validation data
     preds_val = clf.predict(mus_val)
-    print(mus_val.shape)
     accuracy = accuracy_score(lbls_val, preds_val)
 
     unique_lbls = sorted(set(lbls_val))
@@ -721,23 +896,27 @@ accuracy1, unique_lbls1, conf_m1, clf1 = logreg(mus1, lbls1)
 # Now let's plot the confusion matrix:
 
 # %%
-def confmatrix(conf_m, accuracy, unique_lbls):
-    fig, ax = plt.subplots()
+def confmatrix(ax, conf_m, accuracy, unique_lbls, title=""):
     ax.imshow(conf_m)
-    ax.set_title(f"Accuracy: {accuracy:.4f}")
+    ax.set_title(f"{title}\nAccuracy: {accuracy:.4f}")
     ax.set_ylabel("True")
     ax.set_xlabel("Predicted")
     for i in range(conf_m.shape[0]):
         for j in range(conf_m.shape[1]):
-            text = ax.text(j, i, conf_m[i, j],
-                        ha="center", va="center", color="w")
-            
+            ax.text(j, i, conf_m[i, j],
+                    ha="center", va="center", color="w")
     ax.set_xticks(unique_lbls)
-    ax.set_yticks(unique_lbls);
+    ax.set_yticks(unique_lbls)
 
 
-confmatrix(conf_m0, accuracy0, unique_lbls0)
-confmatrix(conf_m1, accuracy1, unique_lbls1)
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+confmatrix(axes[0], conf_m0, accuracy0, unique_lbls0, title="β=0")
+confmatrix(axes[1], conf_m1, accuracy1, unique_lbls1, title="β>>0")
+
+plt.suptitle("Logistic Regression on Latent Space (μ₁, μ₂)", fontsize=13)
+plt.tight_layout()
+plt.show()
 
 
 # %% [markdown]
@@ -828,8 +1007,52 @@ for row, gen, labels, title in [
 
 plt.tight_layout()
 
+# %%
+# pip install umap-learn
+from umap import UMAP
+from matplotlib.colors import ListedColormap
+
+def run_umap(latents, n_components=2, random_state=42, n_neighbors=15, min_dist=0.1, means=None):
+    reducer = UMAP(n_components=n_components, random_state=random_state,
+                   n_neighbors=n_neighbors, min_dist=min_dist)
+    if means is not None:
+        combined = np.concatenate([latents.numpy(), means.numpy()])
+        combined_2d = reducer.fit_transform(combined)
+
+        # Split back into latents and means
+        mu_2d = combined_2d[:len(latents)]        # (10000, 2)
+        mu_mean_2d = combined_2d[len(latents):]  # (10, 2)
+        return mu_2d, mu_mean_2d
+
+    mu_2d = reducer.fit_transform(latents.numpy())
+    return mu_2d
+
+
+def plot_umap(mu_2d, labels,
+              cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
+
+    ticks = np.unique(labels)
+    base_cmap = plt.get_cmap(cmap)
+    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) + 1))
+    new_cmap = ListedColormap(colors_n)
+
+    plt.figure(figsize=(10, 8))
+    scatter = plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
+    plt.colorbar(scatter, ticks=ticks)
+
+    if centers is not None:
+        for i, label in enumerate(center_labels):
+            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor="white", size='large')
+        plt.scatter(centers[:, 0], centers[:, 1], s=50, marker="X", c="k", zorder=10000)
+    plt.axis('off')
+
+
+# %%
+mu_2d_0, mu_means_2d_0 = run_umap(mus0, means = mu_mean0)
+plot_umap(mu_2d_0, lbls0, cmap = "tab10", centers = mu_means_2d_0, center_labels=range(10))
+
 # %% [markdown]
-# ## Part A.6: Contrastive learning
+# ## Part A.3: Contrastive learning
 #
 #
 #
