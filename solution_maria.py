@@ -749,9 +749,8 @@ def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1):
 
     if mu_mean is not None:
         for d in range(10):
-            kw = dict(marker="X", zorder=9)
-            ax.scatter(*mu_mean[d], s=220, color="white", edgecolors="white", linewidths=3, **kw)
-            ax.scatter(*mu_mean[d], s=80,  color=CMAP(d), edgecolors="black", linewidths=0.5, zorder=10)
+            ax.scatter(*mu_mean[d], s=220, color="white", edgecolors="white", linewidths=3, marker="X", zorder=9)
+            ax.scatter(*mu_mean[d], s=80,  color=CMAP(d), edgecolors="black", linewidths=0.5, marker="X", zorder=10)
             ax.annotate(str(d), xy=mu_mean[d], fontsize=8, fontweight="bold",
                         ha="center", va="bottom", xytext=(0, 5),
                         textcoords="offset points", zorder=11,
@@ -761,30 +760,58 @@ def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1):
     ax.set_aspect("equal")
 
 
-# ── build figure ───────────────────────────────────────────────────────────
-fig, axes = plt.subplots(2, 2, figsize=(13, 10))
+def scatter_with_normal(ax, mus, lbls, rnd_normal, mean, std):
+    """Digits on top of magenta N(0,1) cloud."""
+    ax.scatter(rnd_normal[:, 0], rnd_normal[:, 1],
+               s=1, alpha=0.25, color="magenta", label=f"N({mean},{std})", rasterized=True, zorder=5)
+    ax.scatter(mus[:, 0], mus[:, 1],
+               s=1, color="gray", label="mu", rasterized=True, zorder=2)
+    ax.legend(markerscale=6, ncol=2, fontsize=7, loc="best")
+    ax.set_aspect("equal")
 
-for ax, fn, mus, lbls, mu_mean, title in [
-    (axes[0,0], scatter_digits,      mus0, lbls0, mu_mean0, "β=0 latent space"),
-    (axes[1,0], scatter_digits,      mus1, lbls1, mu_mean1, "β=high latent space"),
-    (axes[0,1], scatter_with_normal, mus0, lbls0, None,     "β=0 vs N(0,1)"),
-    (axes[1,1], scatter_with_normal, mus1, lbls1, None,     "β=high vs N(0,1)"),
-]:
-    fn(ax, mus, lbls) if mu_mean is None else fn(ax, mus, lbls, mu_mean=mu_mean)
-    ax.set_title(title, fontsize=11)
-    ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
 
-plt.suptitle("Latent-space comparison: β=0 vs β=high", fontsize=13, y=1.01)
-plt.tight_layout()
-plt.show()
+def plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1):
+    """Latent space coloured by digit, with per-class centroids."""
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    for ax, mus, lbls, mu_mean, title in [
+        (axes[0], mus0, lbls0, mu_mean0, "β=0 latent space"),
+        (axes[1], mus1, lbls1, mu_mean1, "β=high latent space"),
+    ]:
+        scatter_digits(ax, mus, lbls, mu_mean=mu_mean)
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
+    fig.suptitle("Latent space — coloured by digit", fontsize=13)
+    plt.tight_layout(); plt.show()
+
+
+def plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal, mean = 0, std = 1):
+    """Latent space overlaid on N(mean,std) prior."""
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    for ax, mus, lbls, title in [
+        (axes[0], mus0, lbls0, f"β=0 vs N({mean},{std})"),
+        (axes[1], mus1, lbls1, f"β>>0 vs N({mean},{std})"),
+    ]:
+        scatter_with_normal(ax, mus, lbls, rnd_normal, mean, std)
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
+    fig.suptitle(f"Latent space vs N({mean},{std}) prior", fontsize=13)
+    plt.tight_layout(); plt.show()
+
+
+# ── call ───────────────────────────────────────────────────────────────────
+plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1)
+
+mean = 0
+std = 1
+plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean, std, size=(10000, 2)), mean = mean, std = std)
 
 
 # %% [markdown]
 # Each point represents one test image. 
-# ** left column ** 
+# ** top row ** 
 # The marker x shows the per-class centroid --- the average mu across all images of that digit. 
 #
-# ** right column** 
+# ** bottom row** 
 # Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution (magenta). 
 #
 # Question: Which model's latent space is more similar to a standard normal distribution? 
@@ -839,12 +866,12 @@ fig, axes = plt.subplots(1, 2, figsize=(13, 7))
 
 ax = axes[0]
 scatter_digits(ax, z_samples0.numpy(), lbls0_rep, mu_mean=mu_mean0, alpha = 0.1)
-ax.set_title("β=0 — 100 samples per posterior", fontsize=11)
+ax.set_title("β=0 — 50 samples per posterior", fontsize=11)
 ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
 
 ax = axes[1]
 scatter_digits(ax, z_samples1.numpy(), lbls1_rep, mu_mean=mu_mean1, alpha = 0.1)
-ax.set_title("β=high — 100 samples per posterior", fontsize=11)
+ax.set_title("β=high — 50 samples per posterior", fontsize=11)
 ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
 
 plt.suptitle("Sampled z", fontsize=13)
@@ -925,6 +952,10 @@ plt.show()
 
 
 # %% [markdown]
+# Question: is one classification better than the other? If so – why? 
+# Does this mean the model that results in a better classification is the better model? 
+
+# %% [markdown]
 # ### A.2.6. Sample from the latent space
 # So far, we have looked at the latent space. Next, we look at what the decoder produces given positions in the latent space 
 
@@ -937,6 +968,10 @@ plt.show()
 # In a latent-space with well-separated clusters, each mean should look like a clean version of the digit.  
 
 # %%
+# Uncomment and run if you want to see the latent-space again: 
+# plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1)
+
+# %%
 # Plot average latent vectors 
 
 def gen_mean_numbers(model, mu_mean, title):
@@ -945,24 +980,60 @@ def gen_mean_numbers(model, mu_mean, title):
         for i in range(10):
             gen = model.decode(mu_mean[i].to(device))
 
-            ax[i].imshow(gen.detach().cpu().squeeze().numpy())
+            ax[i].imshow(gen.detach().cpu().squeeze().numpy(), cmap = "Grays")
             ax[i].set_title(f"Mean for {i}")
     fig.suptitle(title)
     plt.tight_layout()
 
 
-gen_mean_numbers(model0, mu_mean0, title="Model 0")
-#gen_mean_numbers(model1, mu_mean1, title="Model 1")
+#gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
+gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
+
+# %% [markdown]
+# #### Interpolate between digits in the latent space 
+# Above, we have seen "mean" representations for each digit. 
+# We can now sample in a straight line between two such mean digits and observe how the reconstructions changes. 
+#
+# If your latent spaces permit, pick two digits that connect in a straight line
+# * with gaps in-between
+# * traversing other digits
+# * without gaps and without traversing other digits
 
 # %%
-# interpolate between 0 and 3 
-def interpolate(digit_a, digit_b, mu_mean, model):
+# TODO: pick digits 
+digit_a = 1
+digit_b = 3
+steps = 12 # number of times to sample 
+
+
+def plot_latent_digits_interp(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1, digit_a, digit_b):
+    """Latent space coloured by digit, with a line connecting two class centroids."""
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    for ax, mus, lbls, mu_mean, title in [
+        (axes[0], mus0, lbls0, mu_mean0, "β=0 latent space"),
+        (axes[1], mus1, lbls1, mu_mean1, "β=high latent space"),]:
+        scatter_digits(ax, mus, lbls, mu_mean=mu_mean)
+
+        # ── line between the two class centroids ──────────────────────────
+        pts = np.stack([mu_mean[digit_a], mu_mean[digit_b]])
+        ax.plot(pts[:, 0], pts[:, 1], c="black", lw=2, ls="--", zorder=20)
+
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
+
+    fig.suptitle(f"Latent space — interpolation path {digit_a} → {digit_b}", fontsize=13)
+    plt.tight_layout(); plt.show()
+
+
+
+
+# interpolate between two digits 
+def interpolate(digit_a, digit_b, mu_mean, model, title, steps = 10):
 
     mu_a = mu_mean[digit_a]
     mu_b = mu_mean[digit_b]
 
-    steps = 8
-    fig, ax = plt.subplots(1, steps, figsize = (20, 10))
+    _, ax = plt.subplots(1, steps, figsize = (20, 3))
 
     with torch.no_grad():
         for i, weight_b in enumerate(np.linspace(0, 1, steps)):
@@ -971,21 +1042,45 @@ def interpolate(digit_a, digit_b, mu_mean, model):
             trajectory = trajectory.to(device)
             gen = model.decode(trajectory)
 
-            ax[i].imshow(gen.detach().cpu().squeeze().numpy())
+            ax[i].imshow(gen.detach().cpu().squeeze().numpy(), cmap = "Grays")
             ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
+    plt.suptitle(title)
     plt.tight_layout()
 
-interpolate(0, 3, mu_mean0, model0)
+
+
+plot_latent_digits_interp(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1, digit_a=digit_a, digit_b=digit_b)
+
+interpolate(digit_a, digit_b, mu_mean0, model0, "Beta = 0", steps = steps)
+interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
 
 # %% [markdown]
+# #### Sampling from the latent space 
 #
+# So far, we've sampled from the latent space based on rules defined by landmarks, notably the mean representation of each digit. 
+# Now, we will sample randomly. 
+#
+# We draw 10000 points from a standard normal and pass them through the decoder of `model0` and `model1` to generate 10000 images --- 10 examples are displayed.   
+# We also use the logistic regression classifiers trained on `model0` and `model1` to predict which digit a randomly sampled point corresponds to in the latent space of `model0` and `model1` respectively. 
+#
+# The bar chart in the last column shows the distribution of predicted classes across all 10000 samples 
+#
+#
+# * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
+# * What would a perfectly uniform distributiont tell us about the latent space? 
+# * modify mean and std to sample from different regions of the latent space. How do you interpret the results?
 
 # %%
+MEAN = 0
+STD = 1
+
+
 n = 10000
-latent_dims = 3
+latent_dims = 2
 
-random_latent = np.random.normal(0, 1, size=(n, latent_dims))
+random_latent = np.random.normal(MEAN, STD, size=(n, latent_dims))
 
+plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=random_latent, mean = MEAN, std = STD)
 
 with torch.no_grad():
 
@@ -998,7 +1093,7 @@ with torch.no_grad():
 
 
 n_show = 10
-fig, ax = plt.subplots(2, n_show + 1, figsize = (20, 7))
+fig, ax = plt.subplots(2, n_show + 1, figsize = (20, 4))
 for i in range(n_show):
     ax[0, i].imshow(gen_0[i].detach().squeeze(), cmap = "grey")
     ax[0, i].set_title(gen_labels_0[i])
@@ -1008,8 +1103,8 @@ for i in range(n_show):
 
 
 for row, gen, labels, title in [
-    (0, gen_0, gen_labels_0, "(β=0)"),
-    (1, gen_1, gen_labels_1, "(β=1)"),
+    (0, gen_0, gen_labels_0, "β=0"),
+    (1, gen_1, gen_labels_1, "β>>1"),
 ]:
     for i in range(n_show):
         ax[row, i].imshow(gen[i].detach().squeeze(), cmap="gray")
@@ -1020,8 +1115,55 @@ for row, gen, labels, title in [
 
 plt.tight_layout()
 
+# %% [markdown]
+# ## Higher-dimensional latent-spaces
+#
+# So far, we've only looked at a models with two latent dimensions. 
+# It is easier to visualize and intuitively understand two dimensions, but two numbers may not be enough to capture alll meaningful variation of the dataset. 
+# Digits may overlap in latent-space, because two dimensions do not offer enough room to separate them out. 
+#
+# Let's train a model with higher-dimensional latent sapce 
+# * Instantiate a new variational autoencoder model and name it `model2`
+# * Chose `latent_dim = n`, where n is bigger than 5 and smaller than 100
+# * Instantiate a new optimizer 
+# * Pass `beta = 1`
+# * Train your new model for `epochs = 1000`
+
 # %%
-# pip install umap-learn
+latent_dim = 99
+
+model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
+optimizer = Adam(model2.parameters(), lr = 0.0001)
+
+epochs = 1000
+beta = 1 
+
+train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
+
+# %% [markdown]
+# Let's fast-forwarde – get latent features
+
+# %%
+mus2, logvars2, lbls2, mu_mean2 = get_latent_features(model2, tqdm(test_loader))
+
+print(mus2.shape) # N samples, latent dims
+print(logvars2.shape) # N samples, latent dims
+print(lbls2.shape) # N samples
+print(mu_mean2.shape) # N digits, latent dims
+
+
+# %% [markdown]
+# #### Dimensionality reduction on the latent space 
+# We now have too many latent dimensions to easily visualize. 
+#
+# We therefore apply UMAP (Uniform Manifold Approximationa nd Porjection). UMAP is a dimensionality reduction technique that non-linearly projects the high-dimensional latent space to 2D.  
+# UMAP attempts to keep points that are close in high-dimensions close in their 2D projection. 
+#
+# `run_umap` performs this projection on mus2 (the posterior mean in the latent space of all test images) and mu_mean, the per-class centroid in the latent space. 
+#
+# Note that UMAP is a visualization tool. We can use it to build intuition, but should not draw conclusions about the geometry of the latent space. 
+
+# %%
 from umap import UMAP
 from matplotlib.colors import ListedColormap
 
@@ -1061,8 +1203,20 @@ def plot_umap(mu_2d, labels,
 
 
 # %%
-mu_2d_0, mu_means_2d_0 = run_umap(mus0, means = mu_mean0)
-plot_umap(mu_2d_0, lbls0, cmap = "tab10", centers = mu_means_2d_0, center_labels=range(10))
+mu_2d_2, mu_means_2d_2 = run_umap(mus2, means = mu_mean2)
+plot_umap(mu_2d_2, lbls2, cmap = "tab10", centers = mu_means_2d_2, center_labels=range(10))
+
+# %%
+accuracy2, unique_lbls2, conf_m2, clf2 = logreg(mus2, lbls2)
+
+
+fig, axes = plt.subplots(1, 1, figsize=(5, 5))
+
+confmatrix(axes, conf_m2, accuracy2, unique_lbls2, title= f"β=1, latent_dims = {latent_dim}")
+
+plt.suptitle("Logistic Regression on Latent Space (μ₁, μ₂)", fontsize=13)
+plt.tight_layout()
+plt.show()
 
 # %% [markdown]
 # ## Part A.3: Contrastive learning
