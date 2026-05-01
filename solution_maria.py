@@ -591,7 +591,7 @@ view_test_sample(model, test_loader)
 # Not great, not terrible... Let's train some more...
 
 # %% [markdown]
-# ### A 2.4.5 Train a model without regularized latent sapce
+# ### A.2.4.5 Train a model without regularized latent sapce
 
 # %% [markdown]
 # Let's train our first "serious" model. 
@@ -617,6 +617,9 @@ losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = bet
 view_test_sample(model0, test_loader)
 
 # %% [markdown]
+# ### A 2.4.6 Train a model with regularized latent sapce
+
+# %% [markdown]
 # Reconstructed images should now look better. 
 #
 # * Are you happy with the KL Loss?
@@ -633,7 +636,7 @@ view_test_sample(model0, test_loader)
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-beta = 10
+beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
@@ -721,7 +724,10 @@ def get_latent_features(model, loader):
 # %%
 
 #get all latent features
+# model 0 
 mus0, logvars0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
+
+# model 1 
 mus1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
 
 
@@ -730,75 +736,75 @@ print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 
 # %% [markdown]
 # #### Part A.2.5.2: Visualize the latent space. 
+# Let's plot `mu0` and `mu1`.
+#
 
 # %%
-def scatter_digits(ax, mus, lbls, mu_mean=None, alpha = 1):
+def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1):
     """Colour-coded scatter, one series per digit so legend works."""
     for d in range(10):
         mask = lbls == d
-        ax.scatter(mus[mask, 0], mus[mask, 1],
-                   s=1, color=CMAP(d), label=str(d), rasterized=True, alpha = alpha)
+        ax.scatter(mus[mask, 0], mus[mask, 1], s=1, color=CMAP(d),
+                   label=str(d), rasterized=True, alpha=alpha)
 
     if mu_mean is not None:
         for d in range(10):
-            # ── white halo behind the cross ───────────────────────────────
-            ax.scatter(mu_mean[d, 0], mu_mean[d, 1],
-                       s=220, color="white",
-                       marker="X",
-                       edgecolors="white", linewidths=3,
-                       zorder=9)
-            # ── coloured cross on top ─────────────────────────────────────
-            ax.scatter(mu_mean[d, 0], mu_mean[d, 1],
-                       s=80, color=CMAP(d),
-                       marker="X",
-                       edgecolors="black", linewidths=0.5,
-                       zorder=10,
-                       rasterized=False)
-            # ── digit label with bright background box ────────────────────
-            ax.annotate(str(d),
-                        xy=(mu_mean[d, 0], mu_mean[d, 1]),
-                        fontsize=8, fontweight="bold",
-                        ha="center", va="bottom",
-                        xytext=(0, 5), textcoords="offset points",
-                        zorder=11,
-                        bbox=dict(boxstyle="round,pad=0.15",
-                                  fc="white", ec="none", alpha=0.8))
+            kw = dict(marker="X", zorder=9)
+            ax.scatter(*mu_mean[d], s=220, color="white", edgecolors="white", linewidths=3, **kw)
+            ax.scatter(*mu_mean[d], s=80,  color=CMAP(d), edgecolors="black", linewidths=0.5, zorder=10)
+            ax.annotate(str(d), xy=mu_mean[d], fontsize=8, fontweight="bold",
+                        ha="center", va="bottom", xytext=(0, 5),
+                        textcoords="offset points", zorder=11,
+                        bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.8))
 
-    ax.legend(title="Digit", markerscale=6,
-              ncol=2, fontsize=7, loc="best")
+    ax.legend(title="Digit", markerscale=6, ncol=2, fontsize=7, loc="best")
     ax.set_aspect("equal")
+
 
 # ── build figure ───────────────────────────────────────────────────────────
 fig, axes = plt.subplots(2, 2, figsize=(13, 10))
 
-# ── top-left : AE (β=0) coloured by digit ─────────────────────────────────
-ax = axes[0, 0]
-scatter_digits(ax, mus0, lbls0, mu_mean=mu_mean0)   # ← means added
-ax.set_title(f"β=0 latent space", fontsize=11)
-ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
-
-# ── bottom-left : VAE (β=high) coloured by digit ──────────────────────────
-ax = axes[1, 0]
-scatter_digits(ax, mus1, lbls1, mu_mean=mu_mean1)   # ← means added
-ax.set_title(f"β=high latent space", fontsize=11)
-ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
-
-# ── top-right : AE (β=0) + N(0,1) overlay ─────────────────────────────────
-ax = axes[0, 1]
-scatter_with_normal(ax, mus0, lbls0)
-ax.set_title(f"β=0 vs N(0,1)", fontsize=11)
-ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
-
-# ── bottom-right : VAE (β=high) + N(0,1) overlay ──────────────────────────
-ax = axes[1, 1]
-scatter_with_normal(ax, mus1, lbls1)
-ax.set_title(f"β=high vs N(0,1)", fontsize=11)
-ax.set_xlabel("mu₁");  ax.set_ylabel("mu₂")
+for ax, fn, mus, lbls, mu_mean, title in [
+    (axes[0,0], scatter_digits,      mus0, lbls0, mu_mean0, "β=0 latent space"),
+    (axes[1,0], scatter_digits,      mus1, lbls1, mu_mean1, "β=high latent space"),
+    (axes[0,1], scatter_with_normal, mus0, lbls0, None,     "β=0 vs N(0,1)"),
+    (axes[1,1], scatter_with_normal, mus1, lbls1, None,     "β=high vs N(0,1)"),
+]:
+    fn(ax, mus, lbls) if mu_mean is None else fn(ax, mus, lbls, mu_mean=mu_mean)
+    ax.set_title(title, fontsize=11)
+    ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
 
 plt.suptitle("Latent-space comparison: β=0 vs β=high", fontsize=13, y=1.01)
 plt.tight_layout()
 plt.show()
 
+
+# %% [markdown]
+# Each point represents one test image. 
+# ** left column ** 
+# The marker x shows the per-class centroid --- the average mu across all images of that digit. 
+#
+# ** right column** 
+# Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution (magenta). 
+#
+# Question: Which model's latent space is more similar to a standard normal distribution? 
+# Why is that the case? 
+#
+# Question: Look at the per-class centroids. Do you think there's a reason why some centroids are closer to each other, while others are more distant? 
+#
+#
+# But hold up, we plotted `mu`, but what about `logvar`? 
+#
+# So far we have only visualized `mu`, the center of each images distribution in latent space. 
+# The encoder also outputs `logvar`, which controls the spread of each images distribution. 
+#
+# Below we will sample 50 values `z` from `mu` and `logvar`. 
+#
+# So each of the 10000 test-image is represented by 50 points – 50000 points in total. 
+#
+# Question: 
+# Which latent space is more continuous? 
+#
 
 # %%
 def sample_from_latents(mus, logvars, n_samples=50):
@@ -846,10 +852,9 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# Plotting the two latent dimensions shows how the numbers separate in latent space. 
-
-# %% [markdown]
-# Looks well separated, but is it really? 
+# #### Part A.2.5.3: Clustering the latent space
+# The previous plots show clusters of numbers emerging. But can we quantify how well these clusters are separated? 
+#
 # Next, we train a logistic regression classifier on the latent space. 
 # This is asking how well a **simple linear model** can distinguish digits 
 # using only their latent coordinates (μ₁, μ₂) as features.
@@ -920,11 +925,16 @@ plt.show()
 
 
 # %% [markdown]
-# ### Sample from the latent space
+# ### A.2.6. Sample from the latent space
+# So far, we have looked at the latent space. Next, we look at what the decoder produces given positions in the latent space 
 
 # %% [markdown]
-# Sample using mean vectors
+# Function gen_mean_numbers takes mu_mean, the average latent position of all test images of digit i. 
+# These correspond to the centroids shown in the plots above. 
 #
+# The result is the most typical representation of each digit as embedded by the model. 
+#
+# In a latent-space with well-separated clusters, each mean should look like a clean version of the digit.  
 
 # %%
 # Plot average latent vectors 
@@ -942,7 +952,7 @@ def gen_mean_numbers(model, mu_mean, title):
 
 
 gen_mean_numbers(model0, mu_mean0, title="Model 0")
-
+#gen_mean_numbers(model1, mu_mean1, title="Model 1")
 
 # %%
 # interpolate between 0 and 3 
@@ -966,6 +976,9 @@ def interpolate(digit_a, digit_b, mu_mean, model):
     plt.tight_layout()
 
 interpolate(0, 3, mu_mean0, model0)
+
+# %% [markdown]
+#
 
 # %%
 n = 10000
