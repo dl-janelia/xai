@@ -50,6 +50,7 @@
 # 4. Create attributions from the counterfactual, and learn the differences between the classes.
 #
 # If time permits, we will try to apply this all over again as a bonus exercise to a much more complex and more biologically relevant problem.
+#
 # ### Acknowledgments
 #
 # This notebook was written by Diane Adjavon, Maria Theiss and Anna Foix-Romero with input from
@@ -71,6 +72,8 @@
 # - **Drafting** of reusable helper functions
 #
 # All AI-assisted content was reviewed, edited, and validated by the notebook authors.
+#
+# ***
 # %% [markdown]
 # <div class="alert alert-danger">
 # Set your python kernel to <code>07_xai</code>
@@ -78,7 +81,8 @@
 #
 # %% [markdown]
 # # PART A: Representation learning
-# ## What is a "representation" and why is that useful?
+# ## Part A.0: Conceptual introduction 
+# ### What is a representation and why is that useful?
 # A representation is a mapping from raw data to a structured, typically lower-dimensional space, called latent space, that ideally captures meaningful features of the data.  
 #
 # Representations  
@@ -87,26 +91,28 @@
 # - Enable classification, clustering, and data generation 
 # - Aid interpretability 
 #
-# ## What does it mean "a good representation"?
-# Good representations are compact: 
+# ### What is a good representation?
+# In many cases, good representations are... 
+#
+# **Compact**  
 # Later, we will see example images of MNIST – 28 x 28 images of hand-written digits on dark background.  
 # We can view each image as existing in an 28 x 28 = 784 - dimensional space. However, most of the image carries irrelevant information. 
 # For instance, most pixels belong to the dark background that does not contain infromation about the imaged digit.  
 # By keeping a representation compact (but not too compact!), we force the model to discard irrelevant information. 
 #
-# Smooth and continuous 
+# **Smooth and continuous**  
 # Small changes in the input should lead to small changes in the representation. There should be no "gaps" in the representation.  
 # This property makes it possible to generate new data from the representation, as each location in the latent space contains meaningful information.  
 #
-# Structured 
+# **Structured**  
 # Similar inputs should be mapped to close-by locations in latent space, whereas dissimilar inputs should be distant to each other in latent space. 
 # This means that clusters present in the input, should also appear in latent space. 
 #
-# Disentangled 
+# **Disentangled**  
 # Ideally, each dimension of the latent space should capture a different feature of the input-image. For example, one dimension could capture the tilt (left-right) of handwritten digits, 
 # another the identity of the digits, yet another the boldness of the text.  
 #
-# ## Unsupervised learning
+# ### Unsupervised learning
 # The models trained in part A are an example of unsupervised learning. We do not provide labels --- i.e. the model trains on images of hand-written digits, but does not know the true identity (labels 0 - 9) of each image. 
 # This means the model is learning structural information that is intrinsic to the data. It does so by fulfilling two training objectives: 
 # - Reconstruction: Reconstruction-loss incentivises the model to generate a reconstructed version of an input-image from the latent space. This means that the latent space needs to ideally carry information to allow for a close reconstruction.  
@@ -114,9 +120,13 @@
 #
 # Unsupervised learning is valuable in applications where labels are costly to generate or entirely unknown. 
 #
+# ---
+# %% [markdown]
+#
 # ## Part A.1: General set-up
 # In this part of the notebook, we will load the same dataset as in the previous exercise. 
-# ### The MNIST dataset
+#
+# ### Background - the MNIST dataset
 # MNIST is a machine learning benchmark dataset:
 # * **70,000** grayscale images of handwritten digits 0 - 9.  
 # * Of which are **60,000** training images and **10,000** testing images. 
@@ -129,8 +139,9 @@
 # Documentation for this pytorch dataset is available at https://pytorch.org/vision/main/generated/torchvision.datasets.MNIST.html
 #
 # Let's get started and load our dataset, transforming the images into torch tensors and normalising them.
+
 # %% [markdown]
-# #### Load MNIST
+# ### Load MNIST
 
 # %%
 import torchvision
@@ -167,7 +178,7 @@ for i, ax in enumerate(axs.flatten()):
     ax.set_title(f"Class {y}")
     ax.axis("off")
 
-fig.colorbar(im, ax=axs, orientation='vertical', label="gray value")
+fig.colorbar(im, ax=axs, orientation='vertical', label="gray value", shrink = 0.9)
 # %% [markdown]
 # #### Dataloaders
 # Now, from the loaded datasets (both the train and test splits), we derive the dataloaders. We use dataloaders as they provide additional load-time features.  
@@ -175,21 +186,9 @@ fig.colorbar(im, ax=axs, orientation='vertical', label="gray value")
 # Here, we set the `batch_size` for both the train and test loader, and set `shuffle` for training only.
 
 # %%
-# if torch.cuda.is_available():
-#     device = torch.device("cuda")
-# elif torch.backends.mps.is_available():
-#     device = torch.device("mps")
-# else:
-import torch
-device = torch.device("cpu")
-    
-print(f"Using device: {device}")
-
-# %%
+from torch.utils.data import DataLoader
 
 batch_size = 8
-
-from torch.utils.data import DataLoader
 train_loader = DataLoader(train_mnist, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_mnist, batch_size=batch_size, shuffle=False)
 
@@ -220,14 +219,15 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # | Batch dimension | ❌ | ✅ (size = `batch_size`) |
 
 # %% [markdown]
-# ### Part A.2: Variational autoencoders
+# ## Part A.2: Variational Autoencoders (VAE)
 # A variational autoencoder is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.  
 # The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.  
 # In our case, we convert `28 * 28 = 784` pixel images into a few core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
-# #### Part A.2.1: An MLP class for encoder and decoder
-# We chose a simple MLP (multi-layer perceptron) as the architecture to back both the encoder and the decoder.  
-# MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU) to learn. 
+# ### Part A.2.1: The architecture of our VAE
+# #### A shared backbone for encoder and decoder
+# We choose a **Multilayer Perceptron (MLP)** as the architecture to back both the **encoder** and the **decoder**.  
+# MLPs consist of linear transformations (weights and biases) followed by non-linear activation functions (ReLU). 
 
 # %%
 import torch.nn as nn
@@ -255,23 +255,23 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 # %% [markdown]
-# #### Part A.2.2: The VariationalAutoEncoder class
+# #### Building the `VariationalAutoEncoder` class
 #
-# Here we provide a simple VariationalAutoEncoder class making use of our previously defined MLP class for both its encoder and decoder.  
+# Here we provide a `VariationalAutoEncoder` class that uses the previously defined MLP class for the encoder and decoder.  
 # Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
 #
-# The encoder: 
+# **The encoder**: 
 # * Reshapes the input by dropping the unused channel dimension. 
 # * Reduces width and height (28 x 28) to a single dimension (28 * 28 = 784). 
 # * Outputs `mu` and `logvar`; single-dimensional tensors that represent the center and logvariance for a given input
 #
-# The reparametrization trick: 
+# **The reparametrization trick**: 
 # * Allows to sample the latent variable `z` as it if came from a Normal distribution with `mu` and $std = e^{logvar/2}$  
 # * However, sampling `z` from `mu` and `std` does not allow for backpropagation
 # * To allow for backpropagation, the model samples $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
 # * And then samples z with the help of $\epsilon$: $z = mu + \epsilon * e^{logvar/2}$
 #
-# The decoder: 
+# **The decoder**: 
 # * Takes in a latent vector z and uses an MLP to reconstruct the original sample, reshaping as appropriate.
 # %%
 import torch
@@ -319,43 +319,90 @@ class VariationalAutoEncoder(nn.Module):
         xx = self.decode(z)
         return xx, z, mu, logvar
 # %% [markdown]
-# ### Part A.2.3: The loss functions
-# To train, we compute a Binary Cross Entropy "reconstruction" loss
+# ### Part A.2.2: The loss functions 
+# Training a VAE balances two competing objectives: 
+#
+# **Reconstruction**  
+# The reconstruction loss measures how well the decoder reconstructs an input image from the latent space.  
+# The Binary Cross Entropy reconstruction loss (BCE loss) is appropriate here, as we scale input images to gray values of [0, 1].  
+# The decoder's final activation is a Sigmoid function, mapping to the same scale of [0, 1]. 
+#
+#
+# **Latent space regularization**  
+# Kullback-Leibler divergence loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.  
+# KL-loss penalizes the latent space distribution for being different from a standard normal. 
 # %%
+# The reconstruction loss
 rec_loss = nn.BCELoss(reduction="sum")
 
+
+# The KL loss
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)) 
 
+
+# %% [markdown]
+# **Combined loss with beta weighting**  
+# We combine the reconstruction loss and KL loss into an overall loss. The overall loss is what we backpropagate on.  
+# Parameter `beta` adds a weighting to the KL loss.  
+# `beta = 0` means only the reconstruction-loss influences training. 
+
+# %%
 def loss(rec, kl, beta):
     return rec + beta * kl
 
 
 # %% [markdown]
-# ### Part A.2.4: Training
+# ### Part A.2.3: Training infrastructure
 # Now we get to create and train our model on the MNIST dataset.
 #
-# #### Part A.2.4.1: Model instance and optimizer
-#
-# We first create an instance of our VariationalAutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate size, and chose a latent dimension size as well (here, we compress by 10 the total size of the image).
+# #### A.2.3.1 Set the device 
+# As our model and dataset is small, CPUs are likely to outperform GPUs.  
+# The overhead of transferring the data to GPU might make the model slower than running it on CPU. 
+# %%
+device = torch.device("cpu") 
+
+# %% [markdown]
+# #### Part A.2.3.2: Model instance and optimizer
+# **Model instance**  
+# We first create an instance of our VariationalAutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate input size.  
+# We set the latent dimensions to 2. A word of warning on this: 
+
+# %% [markdown]
+# <div class="alert alert-info">
+# <b> Attention: </b><code>latent_dim = 2 </code> is likely underparametrizing the latent space. We will lose a lot of relevant information when compressing a 28 x 28 image down to 2 dimensions. <br>
+# However, we will roll with this for now as it helps us build an intution for the latent space.  <br>
+# Later, we will retrain with a higher-dimensional latent space.  
+# </div>
+
 # %%
 data_sample, _ = next(iter(train_mnist))
 _, w, h = data_sample.shape
 model = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 
 # %% [markdown]
-# We then create an optimizer for the model's parameters. It will be used during training to hold on to the gradients which will be computed from the backpropagation pass and eventually used to update the model's parameters appropriately.
+# **Optimizer**  
+# We then create an optimizer for the model's parameters. During training, gradients will be computed from the backpropagation pass.  
+# The optimizer will read those gradients and update the model's parameters.
 
 # %%
 from torch.optim import Adam
 optimizer = Adam(model.parameters(), lr=0.0001)
 
 # %% [markdown]
-# #### Part A.2.4.2: The training "loop"
-# To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction, observe how close to the original data the reconstruction is using a loss function, and use that observation to inform the model optimisation. Performing these steps going once through all the training data is what is referred to as a training "epoch". We then loop this process over for a desired arbitrary number of training epochs.
+# #### Part A.2.3.3: The training "loop"
+# To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction and embed it into the latent space.  
+# We observe how close to the original data the reconstruction is using the reconstruction loss function, and use that observation to inform the model optimisation.  
+# We penalize the latent space for not following a standard normal distribution using the KL-loss.  
+# Performing these steps going once through all the training data is what is referred to as a training **epoch**. 
+# We then loop this process over for a desired arbitrary number of training epochs.  
 #
-# Below is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs. Note the `epoch_losses` list which will accumulate the average epoch losses as training occurs. We will use it to visualise the loss later.
+# Below are three functions:  
+# `train_epoch`: capture training for a single epoch and which returns the average epoch loss.  
+# `train_epochs`: Calls `train_epoch` for the desired number of epochs and returns the losses per epoch.  
+# is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs.  
+# `plot_losses_live`: Plots losses during training and live-updates every few epochs.   
 # %%
 from tqdm.auto import tqdm
 from itertools import islice
@@ -434,26 +481,28 @@ def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
 
 
 # %% [markdown]
-# ### A.2.4.3 Train the model
+# ### Part A.2.4: Train a model for 100 epochs
 
 # %% [markdown]
-# We can now train the model. Let's do this for 100 epochs.
+# We can now train `model`.  
+# In this part, we want to understand the model rather than analyze its results.  
+# Therefore, we sacrifice quality for time by only training 100 epochs.  
 
 # %%
-# model, optimizer, epoch_rec_losses, epoch_kl_losses, epoch_losses = reset_model()
-train_epochs(100, model, train_loader, optimizer, loss, beta = 1);
+epochs = 100
+train_epochs(epochs, model, train_loader, optimizer, loss, beta = 1);
 
 # %% [markdown]
-# ### A.2.4.4. Inspect the trained model 
+# ### Part A.2.5: Inspect the trained model
 # #### Get a test image
 # Let's inspect what each part of the model does.  
-# We will probe the model with one image.  
+# We will probe the model with **one** image.  
 # Let's get it from the `test_loader`:
 
 # %%
-x, _ = test_loader.dataset[0] 
+x, _ = test_loader.dataset[0] # reminder: test_loader is the dataloader for the test data 
 
-print(f"Image shape : {x.shape} --- B, Y, X") 
+print(f"Image shape : {x.shape} --- C, Y, X") # Just one image! 
 
 plt.figure(figsize=(1,1))
 plt.imshow(x.squeeze(), cmap="Grays");
@@ -461,28 +510,30 @@ plt.imshow(x.squeeze(), cmap="Grays");
 # %% [markdown]
 # #### The encoder
 # Next, we pass the loaded image to the encoder, which returns `mu` and `logvar`.  
-# We set the latent space to have two dimensions --- so each `mu` and `logvar` have two entries. 
+# We previously set the latent space to two dimensions. Therefore, each `mu` and `logvar` have two entries. 
 #
-# Compare the sizes of x 
+# Let's have a look at `mu` and `logvar` 
 
 # %%
-
+model.eval()
 with torch.no_grad():
-    mu, logvar = model.encode(x.to(device))
+    mu, logvar = model.encode(x.unsqueeze(0).to(device))
 
 
 print(f"mu    : {mu}. Dimensions: {len(mu[0])}")
 print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
 
 # %% [markdown]
-# Task: the function .nbytes allows you to see the size of an array or tensor in bytes.  
-# Print the size of x.  
-# Compute the size of mu and the size of logvar. Print their sum.  
-# Which is bigger: the input image, or its latent space embedding?  
+# <div class="alert alert-block alert-info"><h3>Task: Compare size of an inpute image to the latent space</h3>
+# The function <code>.nbytes</code> allows you to see the size of an array or tensor in bytes.  <br>
+# Print the size of <code>x</code>.  <br>
+# Compute the size of <code>mu</code> and the size of <code>logvar</code>. Print their sum.  <br>
+# Which is bigger: the input image, or its latent space embedding? 
 
 # %%
 #Example: 
-print(np.zeros(1).nbytes)
+example_tensor = torch.zeros(1)
+print(example_tensor.nbytes)
 
 print(f"Input image: {x.nbytes} bytes")
 print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
@@ -491,7 +542,7 @@ print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
 # #### Sample
 # Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$  
 # The `reparametrize` function allows for this sampling without blocking backpropagation.  
-# Note how `z` is different for each draw: 
+# Note how `z` is different for each draw. Here, we draw twice and call the result `z_1` and `z_2`. 
 
 # %%
 with torch.no_grad():
@@ -511,8 +562,8 @@ print("Are the two samples the same?", z_1 == z_2 )
 # %%
 
 with torch.no_grad():
-    rec_1 = model.decode(z_1).numpy().squeeze()
-    rec_2 = model.decode(z_2).numpy().squeeze()
+    rec_1 = model.decode(z_1).cpu().numpy().squeeze()
+    rec_2 = model.decode(z_2).cpu().numpy().squeeze()
 
 # %% [markdown]
 # Are the two reconstructed images the same?
@@ -543,7 +594,7 @@ plt.tight_layout()
 # Clearly not! VAEs are *probabilistic* models. 
 
 # %% [markdown]
-# #### Display mulitple reconstructions
+# #### Display multiple reconstructions
 # Now let's look at what reconstructions look like for multiple images.  
 # Below are a couple simple visualisation function to display original and reconstructed images together, and to query the model for a batch of reconstructions and display them using the first function.
 
@@ -588,10 +639,20 @@ def view_test_sample(model, loader):
 view_test_sample(model, test_loader)
 
 # %% [markdown]
-# Not great, not terrible... Let's train some more...
+# Not great, not terrible... After the checkpoint, we will instantiate new models and train them for longer.  
 
 # %% [markdown]
-# ### A.2.4.5 Train a model without regularized latent sapce
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+#
+#
+
+# %% [markdown]
+# ### Part A.2.6: Train two models for 1000 epochs 
+
+# %% [markdown]
+# #### A.2.6.1: Train a model without regularized latent sapce
 
 # %% [markdown]
 # Let's train our first "serious" model. 
@@ -611,25 +672,30 @@ beta = 0
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
 # %% [markdown]
-# Let's have a look at the results: 
+# Let's have a look at the results. Reconstructed images should now look better. 
 
 # %%
 view_test_sample(model0, test_loader)
 
 # %% [markdown]
-# ### A 2.4.6 Train a model with regularized latent sapce
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+#
+# * Which loss is decreasing more? Why? 
+#
+# </div>
 
 # %% [markdown]
-# Reconstructed images should now look better. 
+# #### A.2.6.2: Train a model with regularized latent sapce
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
 #
-# * Are you happy with the KL Loss?
-# * What can you do to make sure the KL Loss doesn't explode? 
 # * Change one variable in the code below to train a new model with better-behaved KL loss. 
-# * Why is it important that the KL Loss stays small? We will later on see an example, but take a moment to think about this.  
 #
 # Tips: 
 # * Have a look at the overall loss function definitions 
 # * Look at the order of magnitude of the reconstruction loss and KL loss to decide on the value
+# </div>
 
 # %%
 # beta 1
@@ -679,8 +745,8 @@ plot_losses_compare(
 
 
 # %% [markdown]
-# ### Part A.2.5: Apply the models to test images
-# #### Part A.2.5.1: Get latent space properties
+# ### Part A.2.7: Apply the models to test images
+# #### Part A.2.7.1: Get latent space properties
 
 # %% [markdown]
 # Previously, we encoded one image into the latent space. Now we will encode the the entire test set. 
@@ -733,15 +799,19 @@ mus1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
 
 print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 
-
 # %% [markdown]
-# #### Part A.2.5.2: Visualize the latent space. 
+# #### Part A.2.7.2: Visualize the latent space. 
 # Let's plot `mu0` and `mu1`.
 #
 
 # %%
-def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1):
+import numpy as np 
+
+def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1, CMAP = "tab10"):
     """Colour-coded scatter, one series per digit so legend works."""
+
+    CMAP = plt.cm.get_cmap(CMAP)
+
     for d in range(10):
         mask = lbls == d
         ax.scatter(mus[mask, 0], mus[mask, 1], s=1, color=CMAP(d),
@@ -814,12 +884,19 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean
 # ** bottom row** 
 # Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution (magenta). 
 #
-# Question: Which model's latent space is more similar to a standard normal distribution? 
-# Why is that the case? 
-#
-# Question: Look at the per-class centroids. Do you think there's a reason why some centroids are closer to each other, while others are more distant? 
 #
 #
+#
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+# <ul>
+# <li>Which model's latent space is more similar to a standard normal distribution? Why is this the case?</li>
+# <li>Look at the per-class centroids. Do you think there's a reason why some centroids are closer to each other, while others are more distant? </li>
+# </ul>
+# </div>
+
+# %% [markdown]
 # But hold up, we plotted `mu`, but what about `logvar`? 
 #
 # So far we have only visualized `mu`, the center of each images distribution in latent space. 
@@ -828,10 +905,6 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean
 # Below we will sample 50 values `z` from `mu` and `logvar`. 
 #
 # So each of the 10000 test-image is represented by 50 points – 50000 points in total. 
-#
-# Question: 
-# Which latent space is more continuous? 
-#
 
 # %%
 def sample_from_latents(mus, logvars, n_samples=50):
@@ -879,7 +952,14 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# #### Part A.2.5.3: Clustering the latent space
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+# <ul>
+# <li>Which latent space is more continuous? </li>
+# </ul>
+# </div>
+
+# %% [markdown]
+# #### Part A.2.7.3: Clustering the latent space
 # The previous plots show clusters of numbers emerging. But can we quantify how well these clusters are separated? 
 #
 # Next, we train a logistic regression classifier on the latent space. 
@@ -952,11 +1032,17 @@ plt.show()
 
 
 # %% [markdown]
-# Question: is one classification better than the other? If so – why? 
-# Does this mean the model that results in a better classification is the better model? 
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+# <ul>
+#
+# * Question: is one classification better than the other? If so – why? 
+# * Does this mean the model that results in a better classification is the better model? 
+# </ul>
+# </div>
+#
 
 # %% [markdown]
-# ### A.2.6. Sample from the latent space
+# ### A.2.8. Sample from the latent space
 # So far, we have looked at the latent space. Next, we look at what the decoder produces given positions in the latent space 
 
 # %% [markdown]
@@ -1002,7 +1088,7 @@ gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 # %%
 # TODO: pick digits 
 digit_a = 1
-digit_b = 3
+digit_b = 7
 steps = 12 # number of times to sample 
 
 
@@ -1064,11 +1150,23 @@ interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
 # We also use the logistic regression classifiers trained on `model0` and `model1` to predict which digit a randomly sampled point corresponds to in the latent space of `model0` and `model1` respectively. 
 #
 # The bar chart in the last column shows the distribution of predicted classes across all 10000 samples 
-#
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+# <ul>
 #
 # * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
 # * What would a perfectly uniform distributiont tell us about the latent space? 
-# * modify mean and std to sample from different regions of the latent space. How do you interpret the results?
+#
+# </ul>
+# </div>
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+#
+# Modify mean and std to sample from different regions of the latent space. How do you interpret the results?
+#
+# </div>
 
 # %%
 MEAN = 0
@@ -1084,21 +1182,21 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=random_latent, mean =
 
 with torch.no_grad():
 
-    gen_0 = model0.decode(torch.Tensor(random_latent))
+    gen_0 = model0.decode(torch.Tensor(random_latent).to(device))
     gen_labels_0 = clf0.predict(random_latent)
 
 
-    gen_1 = model1.decode(torch.Tensor(random_latent))
+    gen_1 = model1.decode(torch.Tensor(random_latent).to(device))
     gen_labels_1 = clf1.predict(random_latent)
 
 
 n_show = 10
 fig, ax = plt.subplots(2, n_show + 1, figsize = (20, 4))
 for i in range(n_show):
-    ax[0, i].imshow(gen_0[i].detach().squeeze(), cmap = "grey")
+    ax[0, i].imshow(gen_0[i].cpu().detach().squeeze(), cmap = "grey")
     ax[0, i].set_title(gen_labels_0[i])
 
-    ax[1, i].imshow(gen_1[i].detach().squeeze(), cmap = "grey")
+    ax[1, i].imshow(gen_1[i].cpu().detach().squeeze(), cmap = "grey")
     ax[1, i].set_title(gen_labels_1[i])
 
 
@@ -1107,7 +1205,7 @@ for row, gen, labels, title in [
     (1, gen_1, gen_labels_1, "β>>1"),
 ]:
     for i in range(n_show):
-        ax[row, i].imshow(gen[i].detach().squeeze(), cmap="gray")
+        ax[row, i].imshow(gen[i].cpu().detach().squeeze(), cmap="gray")
         ax[row, i].set_title(labels[i])
 
     ax[row, n_show].bar(range(10), np.bincount(labels, minlength=10))
@@ -1116,18 +1214,26 @@ for row, gen, labels, title in [
 plt.tight_layout()
 
 # %% [markdown]
-# ## Higher-dimensional latent-spaces
+# ## A.2.9: 0
+# 0Higher-dimensional latent-spaces
 #
 # So far, we've only looked at a models with two latent dimensions. 
-# It is easier to visualize and intuitively understand two dimensions, but two numbers may not be enough to capture alll meaningful variation of the dataset. 
+# It is easier to visualize and intuitively understand two dimensions, but two numbers may not be enough to capture all meaningful variation of the dataset. 
 # Digits may overlap in latent-space, because two dimensions do not offer enough room to separate them out. 
 #
-# Let's train a model with higher-dimensional latent sapce 
+# Let's train a model with higher-dimensional latent sapce. Below, we
 # * Instantiate a new variational autoencoder model and name it `model2`
-# * Chose `latent_dim = n`, where n is bigger than 5 and smaller than 100
 # * Instantiate a new optimizer 
 # * Pass `beta = 1`
 # * Train your new model for `epochs = 1000`
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+#
+# Choose `latent_dim = n`, where n is bigger than 5 and smaller than 100
+#
+# </div>
+#
 
 # %%
 latent_dim = 99
@@ -1214,7 +1320,7 @@ fig, axes = plt.subplots(1, 1, figsize=(5, 5))
 
 confmatrix(axes, conf_m2, accuracy2, unique_lbls2, title= f"β=1, latent_dims = {latent_dim}")
 
-plt.suptitle("Logistic Regression on Latent Space (μ₁, μ₂)", fontsize=13)
+plt.suptitle("Logistic Regression on Latent Space ", fontsize=13)
 plt.tight_layout()
 plt.show()
 
@@ -1546,7 +1652,7 @@ for attr, im, lbl in zip(attributions_blurred, x.cpu().numpy(), y.cpu().numpy())
     visualize_color_attribution(attr, im)
 
 # %% [markdown] tags=[]
-# <div class="altert alert-block alert-warning"><h4> Questions </h4>
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
 # <li>What baseline do you like best so far? Why?</li>
 # <li>Why do you think some baselines work better than others?</li>
