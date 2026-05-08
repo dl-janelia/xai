@@ -113,7 +113,7 @@
 # another the identity of the digits, yet another the boldness of the text.  
 #
 # ### Unsupervised learning
-# The models trained in part A are an example of unsupervised learning. We do not provide labels --- i.e. the model trains on images of hand-written digits, but does not know the true identity (labels 0 - 9) of each image. 
+# The Variational Autoencoder (VAE) trained in part A is an example of representation learning and unsupervised learning. We do not provide labels – i.e. the model trains on images of hand-written digits, but does not know the true identity (labels 0 - 9) of each image. 
 # This means the model is learning structural information that is intrinsic to the data. It does so by fulfilling two training objectives: 
 # - Reconstruction: Reconstruction-loss incentivises the model to generate a reconstructed version of an input-image from the latent space. This means that the latent space needs to ideally carry information to allow for a close reconstruction.  
 # - Constraints on the latent space: We can impose structural constraints on the latent space, ensuring previously discussed smoothness and continuity. 
@@ -128,7 +128,7 @@
 #
 # ### Background - the MNIST dataset
 # MNIST is a machine learning benchmark dataset:
-# * **70,000** grayscale images of handwritten digits 0 - 9.  
+# * **70,000** grayscale images of handwritten digits **0 - 9**.  
 # * Of which are **60,000** training images and **10,000** testing images. 
 # *  Each image has a resolution of **28x28** pixels.  
 #
@@ -182,7 +182,7 @@ fig.colorbar(im, ax=axs, orientation='vertical', label="gray value", shrink = 0.
 # %% [markdown]
 # #### Dataloaders
 # Now, from the loaded datasets (both the train and test splits), we derive the dataloaders. We use dataloaders as they provide additional load-time features.  
-# Specifically, a dataloader enables iterating over the dataset in batches. It provides shuffling if desired.  
+# Specifically, a dataloader enables **iterating** over the dataset in batches. It provides **shuffling** if desired.  
 # Here, we set the `batch_size` for both the train and test loader, and set `shuffle` for training only.
 
 # %%
@@ -193,7 +193,7 @@ train_loader = DataLoader(train_mnist, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_mnist, batch_size=batch_size, shuffle=False)
 
 # %% [markdown]
-# Have a look at the shape of what the dataset iterator and the dataloader iterator differ:
+# The dataset iterator and the dataloader iterator differ in shape: 
 
 # %%
 # Dataset iterator
@@ -220,9 +220,9 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 
 # %% [markdown]
 # ## Part A.2: Variational Autoencoders (VAE)
-# A variational autoencoder is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.  
+# A Variational Autoencoder (VAE) is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.  
 # The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.  
-# In our case, we convert `28 * 28 = 784` pixel images into a few core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
+# In our case, we convert `28 * 28 = 784` pixel images into a **few** core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
 # ### Part A.2.1: The architecture of our VAE
 # #### A shared backbone for encoder and decoder
@@ -257,13 +257,12 @@ class MLP(nn.Module):
 # %% [markdown]
 # #### Building the `VariationalAutoEncoder` class
 #
-# Here we provide a `VariationalAutoEncoder` class that uses the previously defined MLP class for the encoder and decoder.  
-# Note the encode function reshape the input, both dropping the unused channel dimension and reducing width and heigh to a single dimension, with a shape similar to that of the latent features, and outputs the encoded latent features.
+# Here we provide a `VariationalAutoEncoder` class that uses the previously defined **MLP** class for the **encoder** and **decoder**.  
 #
-# **The encoder**: 
+# **The encode function**: 
 # * Reshapes the input by dropping the unused channel dimension. 
 # * Reduces width and height (28 x 28) to a single dimension (28 * 28 = 784). 
-# * Outputs `mu` and `logvar`; single-dimensional tensors that represent the center and logvariance for a given input
+# * Outputs `mu` and `logvar`; single-dimensional tensors that represent the center and logvariance for a given input in the latent space. 
 #
 # **The reparametrization trick**: 
 # * Allows to sample the latent variable `z` as it if came from a Normal distribution with `mu` and $std = e^{logvar/2}$  
@@ -271,8 +270,8 @@ class MLP(nn.Module):
 # * To allow for backpropagation, the model samples $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
 # * And then samples z with the help of $\epsilon$: $z = mu + \epsilon * e^{logvar/2}$
 #
-# **The decoder**: 
-# * Takes in a latent vector z and uses an MLP to reconstruct the original sample, reshaping as appropriate.
+# **The decode function**: 
+# * Takes in a latent vector `z` and uses an MLP to reconstruct the original sample, reshaping as appropriate.
 # %%
 import torch
 
@@ -286,6 +285,17 @@ class VariationalAutoEncoder(nn.Module):
         self.h = h
         data_dim = w * h
         
+        # TODO: name the encoder self.encoder. name the decoder self.decoder 
+
+        # ... = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
+        #                   , hidden_dims=enc_hidden_dims
+        #                   , activation=enc_activation)
+        # ... = MLP( latent_dim, data_dim
+        #                   , hidden_dims=dec_hidden_dims
+        #                   , activation=dec_activation
+        #                   , final_activation=nn.Sigmoid())
+
+        # Solution 
         self.encoder = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
                           , hidden_dims=enc_hidden_dims
                           , activation=enc_activation)
@@ -319,17 +329,23 @@ class VariationalAutoEncoder(nn.Module):
         xx = self.decode(z)
         return xx, z, mu, logvar
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+# The `encoder` and `decoder` are replaced with `...`. Name the encoder istance of the MLP `self.encoder`. Name the decoder instance of the MLP `self.decoder`. <br>
+# How can you tell which is which? 
+# </div>
+
+# %% [markdown]
 # ### Part A.2.2: The loss functions 
 # Training a VAE balances two competing objectives: 
 #
 # **Reconstruction**  
 # The reconstruction loss measures how well the decoder reconstructs an input image from the latent space.  
-# The Binary Cross Entropy reconstruction loss (BCE loss) is appropriate here, as we scale input images to gray values of [0, 1].  
+# The **Binary Cross Entropy** reconstruction loss (**BCE loss**) is appropriate here, as we scale input images to gray values of [0, 1].  
 # The decoder's final activation is a Sigmoid function, mapping to the same scale of [0, 1]. 
 #
 #
 # **Latent space regularization**  
-# Kullback-Leibler divergence loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.  
+# **Kullback-Leibler divergence** loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.  
 # KL-loss penalizes the latent space distribution for being different from a standard normal. 
 # %%
 # The reconstruction loss
@@ -366,8 +382,9 @@ device = torch.device("cpu")
 # %% [markdown]
 # #### Part A.2.3.2: Model instance and optimizer
 # **Model instance**  
-# We first create an instance of our VariationalAutoEncoder. On construction, it needs to know the size of the data it will receive and the desired latent space size. We grab a sample from the dataset to derive the appropriate input size.  
-# We set the latent dimensions to 2. A word of warning on this: 
+# We first create an instance of our `VariationalAutoEncoder` class. On construction, it needs to know the size of the data it will receive and the desired latent space size.  
+# We grab a sample from the dataset to derive the appropriate input size.  
+# We set the latent dimensions to **2**. A word of warning on this: 
 
 # %% [markdown]
 # <div class="alert alert-info">
@@ -393,7 +410,7 @@ optimizer = Adam(model.parameters(), lr=0.0001)
 # %% [markdown]
 # #### Part A.2.3.3: The training "loop"
 # To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction and embed it into the latent space.  
-# We observe how close to the original data the reconstruction is using the reconstruction loss function, and use that observation to inform the model optimisation.  
+# We observe how close to the original data and the reconstruction is using the reconstruction loss function, and use that observation to inform the model optimisation.  
 # We penalize the latent space for not following a standard normal distribution using the KL-loss.  
 # Performing these steps going once through all the training data is what is referred to as a training **epoch**. 
 # We then loop this process over for a desired arbitrary number of training epochs.  
@@ -401,7 +418,6 @@ optimizer = Adam(model.parameters(), lr=0.0001)
 # Below are three functions:  
 # `train_epoch`: capture training for a single epoch and which returns the average epoch loss.  
 # `train_epochs`: Calls `train_epoch` for the desired number of epochs and returns the losses per epoch.  
-# is a function to capture training for a single epoch and which returns the average epoch loss, as well as a function that loops over the behaviour for a desired number of epochs.  
 # `plot_losses_live`: Plots losses during training and live-updates every few epochs.   
 # %%
 from tqdm.auto import tqdm
@@ -535,8 +551,8 @@ print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
 example_tensor = torch.zeros(1)
 print(example_tensor.nbytes)
 
-print(f"Input image: {x.nbytes} bytes")
-print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
+# print(f"Input image: {x.nbytes} bytes")
+# print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
 
 # %% [markdown]
 # #### Sample
@@ -655,12 +671,17 @@ view_test_sample(model, test_loader)
 # #### A.2.6.1: Train a model without regularized latent sapce
 
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+#
 # Let's train our first "serious" model. 
 # * Instantiate a new variational autoencoder model and name it `model0`
 # * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space. 
 # * Instantiate a new optimizer 
 # * Pass `beta = 0`
 # * Train your new model for `epochs = 1000`
+#
+# </div>
+#
 
 # %%
 
@@ -801,7 +822,7 @@ print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
 
 # %% [markdown]
 # #### Part A.2.7.2: Visualize the latent space. 
-# Let's plot `mu0` and `mu1`.
+# **Let's plot `mu0` and `mu1`.**
 #
 
 # %%
@@ -877,15 +898,13 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean
 
 
 # %% [markdown]
-# Each point represents one test image. 
-# ** top row ** 
-# The marker x shows the per-class centroid --- the average mu across all images of that digit. 
+# Each point represents one test image.  
 #
-# ** bottom row** 
+# **top row**  
+# The marker x shows the per-class centroid – the average mu across all images of that digit. 
+#
+# **bottom row**  
 # Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution (magenta). 
-#
-#
-#
 #
 
 # %% [markdown]
@@ -897,10 +916,12 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean
 # </div>
 
 # %% [markdown]
-# But hold up, we plotted `mu`, but what about `logvar`? 
+# **visualizing `logvar`**  
+#
+# We plotted `mu`, but what about `logvar`? 
 #
 # So far we have only visualized `mu`, the center of each images distribution in latent space. 
-# The encoder also outputs `logvar`, which controls the spread of each images distribution. 
+# The encoder also outputs `logvar`, which controls the spread of each images' distribution. 
 #
 # Below we will sample 50 values `z` from `mu` and `logvar`. 
 #
@@ -962,7 +983,7 @@ plt.show()
 # #### Part A.2.7.3: Clustering the latent space
 # The previous plots show clusters of numbers emerging. But can we quantify how well these clusters are separated? 
 #
-# Next, we train a logistic regression classifier on the latent space. 
+# Next, we train a **logistic regression classifier** on the latent space. 
 # This is asking how well a **simple linear model** can distinguish digits 
 # using only their latent coordinates (μ₁, μ₂) as features.
 #
@@ -1046,12 +1067,12 @@ plt.show()
 # So far, we have looked at the latent space. Next, we look at what the decoder produces given positions in the latent space 
 
 # %% [markdown]
-# Function gen_mean_numbers takes mu_mean, the average latent position of all test images of digit i. 
+# Function `gen_mean_numbers` takes `mu_mean`, the average latent position of all test images of digit i. 
 # These correspond to the centroids shown in the plots above. 
 #
 # The result is the most typical representation of each digit as embedded by the model. 
 #
-# In a latent-space with well-separated clusters, each mean should look like a clean version of the digit.  
+# In a latent-space with well-separated clusters, each centroid should look like a clean version of the digit.  
 
 # %%
 # Uncomment and run if you want to see the latent-space again: 
@@ -1080,10 +1101,19 @@ gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 # Above, we have seen "mean" representations for each digit. 
 # We can now sample in a straight line between two such mean digits and observe how the reconstructions changes. 
 #
-# If your latent spaces permit, pick two digits that connect in a straight line
-# * with gaps in-between
-# * traversing other digits
-# * without gaps and without traversing other digits
+#
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+# If your latent spaces permit, pick two digits that connect in a straight line. Observe the results. <br>  
+#
+# * with gaps in-between <br>  
+# * traversing other digits<br>  
+# * without gaps and without traversing other digits.   <br>  
+#
+#
+# Can you explain the generated images?
+# </div>
 
 # %%
 # TODO: pick digits 
@@ -1146,7 +1176,8 @@ interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
 # So far, we've sampled from the latent space based on rules defined by landmarks, notably the mean representation of each digit. 
 # Now, we will sample randomly. 
 #
-# We draw 10000 points from a standard normal and pass them through the decoder of `model0` and `model1` to generate 10000 images --- 10 examples are displayed.   
+# We draw 10000 points from a **standard normal distribution** and pass them through the decoder of `model0` and `model1` to generate 10000 images. 
+# We will display the first 10 samples.    
 # We also use the logistic regression classifiers trained on `model0` and `model1` to predict which digit a randomly sampled point corresponds to in the latent space of `model0` and `model1` respectively. 
 #
 # The bar chart in the last column shows the distribution of predicted classes across all 10000 samples 
@@ -1157,15 +1188,14 @@ interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
 #
 # * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
 # * What would a perfectly uniform distributiont tell us about the latent space? 
+# * Devil's advocate: Why don't we just change the distribution to better fit the latent space?  
 #
 # </ul>
 # </div>
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
-#
-# Modify mean and std to sample from different regions of the latent space. How do you interpret the results?
-#
+# Change MEAN and/or STD to sample from outside of the latent space distribution 
 # </div>
 
 # %%
@@ -1214,8 +1244,7 @@ for row, gen, labels, title in [
 plt.tight_layout()
 
 # %% [markdown]
-# ## A.2.9: 0
-# 0Higher-dimensional latent-spaces
+# ## A.2.9: Higher-dimensional latent-spaces
 #
 # So far, we've only looked at a models with two latent dimensions. 
 # It is easier to visualize and intuitively understand two dimensions, but two numbers may not be enough to capture all meaningful variation of the dataset. 
@@ -1262,10 +1291,10 @@ print(mu_mean2.shape) # N digits, latent dims
 # #### Dimensionality reduction on the latent space 
 # We now have too many latent dimensions to easily visualize. 
 #
-# We therefore apply UMAP (Uniform Manifold Approximationa nd Porjection). UMAP is a dimensionality reduction technique that non-linearly projects the high-dimensional latent space to 2D.  
-# UMAP attempts to keep points that are close in high-dimensions close in their 2D projection. 
+# We therefore apply **UMAP** (Uniform Manifold Approximation and Porjection). UMAP is a dimensionality reduction technique that non-linearly projects the high-dimensional latent space to 2D.  
+# It attempts to keep points that are close in high-dimensions close in their 2D projection. 
 #
-# `run_umap` performs this projection on mus2 (the posterior mean in the latent space of all test images) and mu_mean, the per-class centroid in the latent space. 
+# `run_umap` performs this projection on `mus2` (the posterior mean in the latent space of all test images) and `mu_mean`, the per-class centroid in the latent space. 
 #
 # Note that UMAP is a visualization tool. We can use it to build intuition, but should not draw conclusions about the geometry of the latent space. 
 
@@ -1311,6 +1340,10 @@ def plot_umap(mu_2d, labels,
 # %%
 mu_2d_2, mu_means_2d_2 = run_umap(mus2, means = mu_mean2)
 plot_umap(mu_2d_2, lbls2, cmap = "tab10", centers = mu_means_2d_2, center_labels=range(10))
+
+# %% [markdown]
+# Clusters look well-separated, but we should verify with logistic regression.  
+# Below, we call the logistic regression function again and plot the confusion matrix.  
 
 # %%
 accuracy2, unique_lbls2, conf_m2, clf2 = logreg(mus2, lbls2)
