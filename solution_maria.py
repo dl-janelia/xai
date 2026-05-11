@@ -54,11 +54,10 @@
 # ### Acknowledgments
 #
 # This notebook was written by Diane Adjavon, Maria Theiss and Anna Foix-Romero with input from
-# Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix-Romero, Ben Salmon and Albert Dominguez.
+# Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix-Romero, Ben Salmon, Albert Dominguez, Talley Lambert and Eva de la Serna.
 # Part B was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
 # Part A has been inspired by multiple discussions between Virginie Uhlhmann, Alex Krull, Martin Weigert,
-# Albert Dominguez, Ed Hirata and Anna Foix-Romero. 
-#
+# Albert Dominguez, Ed Hirata and Anna Foix-Romero.  
 #
 # ### AI Statement
 #
@@ -272,6 +271,44 @@ class MLP(nn.Module):
 #
 # **The decode function**: 
 # * Takes in a latent vector `z` and uses an MLP to reconstruct the original sample, reshaping as appropriate.
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task – Fill in the gaps</h2>
+#
+# There are gaps marked as `...`.  
+# Fill them in:
+#
+# **Missing in `def __init__`**
+#
+# The encoder and decoder instance of the MLP are missing. Replace `...` with:     
+# `self.encoder`  
+# `self.decoder`. 
+#
+# How can you tell which is which?
+#
+#
+# **Missing in `def reparameterize`**  
+#
+# `epsilon` (missing twice)  
+# `std` 
+#
+# Tip:  
+# $std = e^{logvar/2}$   
+# $z = mu + \epsilon * std$
+#
+#
+# **Missing in `def forward`**  
+# `mu`   
+# `logvar`   
+# `z`  
+# `self.decode`  
+# `self.encode`  
+# `self.reparameterize`  
+# `xx` (this is the reconstructed image) 
+#
+# </div>
+#
+#
+
 # %%
 import torch
 
@@ -285,17 +322,59 @@ class VariationalAutoEncoder(nn.Module):
         self.h = h
         data_dim = w * h
         
-        # TODO: name the encoder self.encoder. name the decoder self.decoder 
+        # TODO 
+        ... = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
+                          , hidden_dims=enc_hidden_dims
+                          , activation=enc_activation)
+        
+        # TODO  
+        ... = MLP( latent_dim, data_dim
+                          , hidden_dims=dec_hidden_dims
+                          , activation=dec_activation
+                          , final_activation=nn.Sigmoid())
 
-        # ... = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
-        #                   , hidden_dims=enc_hidden_dims
-        #                   , activation=enc_activation)
-        # ... = MLP( latent_dim, data_dim
-        #                   , hidden_dims=dec_hidden_dims
-        #                   , activation=dec_activation
-        #                   , final_activation=nn.Sigmoid())
 
-        # Solution 
+        
+
+
+
+    def encode(self, x):
+        b  = x.shape[0] # batchsize
+        x_flat = x.reshape(b, -1) # (8, 1, 28, 28) → (8, 784)
+        out = self.encoder(x_flat)
+        mu, logvar = torch.chunk(out, 2, dim = 1)
+        return mu, logvar
+    
+    @staticmethod
+    def reparameterize(mu, logvar):
+        ... = torch.exp(logvar / 2) # TODO 
+        ... = torch.randn_like(std) # TODO 
+        return ... * std + mu # TODO 
+
+    def decode(self, z):
+        out = self.decoder(z) 
+        xx = out.reshape(-1, 1, self.w, self.h) # (8, 784) → (8, 1, 28, 28)
+        return xx
+    
+    def forward(self, x):
+        ..., ... = ...(x) # TODO
+        ... = ...(mu, logvar)     # TODO   
+        ... = ...(z)           # TODO      
+        return xx, z, mu, logvar
+
+# %%
+import torch
+
+class VariationalAutoEncoder(nn.Module):
+    def __init__( self, w, h, latent_dim
+                , enc_hidden_dims=[256, 128, 64], enc_activation=nn.ReLU()
+                , dec_hidden_dims=[64, 128, 256], dec_activation=nn.ReLU()
+                ):
+        super().__init__()
+        self.w = w
+        self.h = h
+        data_dim = w * h
+        
         self.encoder = MLP( data_dim, latent_dim * 2 # latent_dim * 2, because it will be split into mu and logvar
                           , hidden_dims=enc_hidden_dims
                           , activation=enc_activation)
@@ -313,10 +392,10 @@ class VariationalAutoEncoder(nn.Module):
         return mu, logvar
     
     @staticmethod
-    def reparameterize(mean, logvar):
+    def reparameterize(mu, logvar):
         std = torch.exp(logvar / 2)
         epsilon = torch.randn_like(std)
-        return epsilon * std + mean
+        return epsilon * std + mu
 
     def decode(self, z):
         out = self.decoder(z) 
@@ -329,22 +408,100 @@ class VariationalAutoEncoder(nn.Module):
         xx = self.decode(z)
         return xx, z, mu, logvar
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h2>Task</h2>
-# The `encoder` and `decoder` are replaced with `...`. Name the encoder istance of the MLP `self.encoder`. Name the decoder instance of the MLP `self.decoder`. <br>
-# How can you tell which is which? 
+# Run the following tests to confirm: 
+
+# %%
+import inspect
+import re
+
+def normalize(s):
+    return re.sub(r'\s+', '', s)
+
+def test_vae(w=28, h=28, latent_dim=16, batch_size=8):
+    vae = VariationalAutoEncoder(w, h, latent_dim)
+    data_dim = w * h
+    x = torch.randn(batch_size, 1, w, h)
+    
+    #  __init__: self.encoder
+    assert hasattr(vae, 'encoder'), \
+        "❌ 'self.encoder' missing or misspelled — correct it in __init__"
+    try:
+        enc_out = vae.encoder(torch.randn(batch_size, data_dim))
+    except RuntimeError:
+        raise AssertionError(
+            f"❌ self.encoder crashed on input shape ({batch_size}, {data_dim}) "
+            f"— did you swap self.encoder and self.decoder?"
+        )
+    assert enc_out.shape == (batch_size, latent_dim * 2), \
+        f"❌ encoder output {enc_out.shape} ≠ ({batch_size}, {latent_dim*2}) — did you swap encoder/decoder?"
+    print("✅ self.encoder: correct")
+
+    #  __init__: self.decoder
+    assert hasattr(vae, 'decoder'), \
+        "❌ 'self.decoder' missing or misspelled — correct it in __init__"
+    try:
+        dec_out = vae.decoder(torch.randn(batch_size, latent_dim))
+    except RuntimeError:
+        raise AssertionError(
+            f"❌ self.decoder crashed on input shape ({batch_size}, {latent_dim}) "
+            f"— did you swap self.encoder and self.decoder?"
+        )
+    assert dec_out.shape == (batch_size, data_dim), \
+        f"❌ decoder output {dec_out.shape} ≠ ({batch_size}, {data_dim}) — did you swap encoder/decoder?"
+    print("✅ self.decoder: correct")
+
+    #  reparameterize: check variable names 
+    norm_reparam = normalize(inspect.getsource(VariationalAutoEncoder.reparameterize))
+
+    assert normalize('std = torch.exp(logvar / 2)') in norm_reparam, \
+        "❌ reparameterize: first blank wrong"
+    print("✅ reparameterize: 'std' correct")
+
+    assert normalize('epsilon = torch.randn_like(std)') in norm_reparam, \
+        "❌ reparameterize: second blank wrong"
+    print("✅ reparameterize: 'epsilon' correct")
+
+    assert  normalize('return epsilon * std + mu') in norm_reparam or \
+            normalize('return std * epsilon + mu') in norm_reparam or \
+            normalize('return mu + epsilon * std') in norm_reparam or \
+            normalize('return mu + std * epsilon') in norm_reparam, \
+            "❌ reparameterize: third blank wrong"
+    print("✅ reparameterize: return statement correct")
+
+    # forward: check variable names
+    xx, z, mu, logvar = vae(x)
+    assert xx.shape == (batch_size, 1, w, h), "❌ forward failed at runtime"
+    norm_forward = normalize(inspect.getsource(VariationalAutoEncoder.forward))
+
+    assert normalize('mu, logvar = self.encode(x)')         in norm_forward, \
+        "❌ forward: check line 1"
+    assert normalize('z = self.reparameterize(mu, logvar)') in norm_forward, \
+        "❌ forward: check line 2"
+    assert normalize('xx = self.decode(z)')                 in norm_forward, \
+        "❌ forward: check line 3"
+    print("✅ forward: all blanks correct")
+
+    print("\n All tests passed!")
+
+test_vae()
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
 # </div>
 
 # %% [markdown]
 # ### Part A.2.2: The loss functions 
 # Training a VAE balances two competing objectives: 
 #
-# **Reconstruction**  
+# #### Reconstruction  
 # The reconstruction loss measures how well the decoder reconstructs an input image from the latent space.  
 # The **Binary Cross Entropy** reconstruction loss (**BCE loss**) is appropriate here, as we scale input images to gray values of [0, 1].  
 # The decoder's final activation is a Sigmoid function, mapping to the same scale of [0, 1]. 
 #
 #
-# **Latent space regularization**  
+# #### Latent space regularization  
 # **Kullback-Leibler divergence** loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.  
 # KL-loss penalizes the latent space distribution for being different from a standard normal. 
 # %%
@@ -359,15 +516,31 @@ def kl_loss(mu, logvar):
 
 
 # %% [markdown]
-# **Combined loss with beta weighting**  
+# #### Combined loss with beta weighting  
 # We combine the reconstruction loss and KL loss into an overall loss. The overall loss is what we backpropagate on.  
 # Parameter `beta` adds a weighting to the KL loss.  
 # `beta = 0` means only the reconstruction-loss influences training. 
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task – Overall loss</h2>
+# Write code that weights the kl loss by beta and adds it to the reconstruction loss  
+# </div>
+
+# %%
+def loss(rec, kl, beta):
+    return ... 
+
 
 # %%
 def loss(rec, kl, beta):
     return rec + beta * kl
 
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
 
 # %% [markdown]
 # ### Part A.2.3: Training infrastructure
@@ -516,7 +689,7 @@ train_epochs(epochs, model, train_loader, optimizer, loss, beta = 1);
 # Let's get it from the `test_loader`:
 
 # %%
-x, _ = test_loader.dataset[0] # reminder: test_loader is the dataloader for the test data 
+x, _ = test_loader.dataset[5] # reminder: test_loader is the dataloader for the test data 
 
 print(f"Image shape : {x.shape} --- C, Y, X") # Just one image! 
 
@@ -551,8 +724,15 @@ print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
 example_tensor = torch.zeros(1)
 print(example_tensor.nbytes)
 
-# print(f"Input image: {x.nbytes} bytes")
-# print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
+# TODO: 
+...
+
+# %%
+example_tensor = torch.zeros(1)
+print(example_tensor.nbytes)
+
+print(f"Input image: {x.nbytes} bytes")
+print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
 
 # %% [markdown]
 # #### Sample
@@ -680,8 +860,18 @@ view_test_sample(model, test_loader)
 # * Pass `beta = 0`
 # * Train your new model for `epochs = 1000`
 #
+#
+#
 # </div>
 #
+
+# %%
+
+model0 = VariationalAutoEncoder(...).to(device)  # TODO 
+optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
+... 
+... 
+losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
 # %%
 
@@ -706,24 +896,44 @@ view_test_sample(model0, test_loader)
 # </div>
 
 # %% [markdown]
-# #### A.2.6.2: Train a model with regularized latent sapce
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
+
+# %% [markdown]
+# #### A.2.6.2: Train a model with regularized latent sapce 
+# We are now training another model called `model1`
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
 #
-# * Change one variable in the code below to train a new model with better-behaved KL loss. 
+# Change one variable in the code below to train a new model with better-behaved KL loss.  
+# In this case, the KL loss doesn't have to decrease – we just want it to increase less.  
 #
 # Tips: 
 # * Have a look at the overall loss function definitions 
-# * Look at the order of magnitude of the reconstruction loss and KL loss to decide on the value
+# * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 1000, to decide on a value
+# * You can train for fewer epochs if you want to try multiple values. Train for 1000 epochs once you decided 
 # </div>
+
+# %%
+model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
+optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
+epochs = 1000
+beta = 0
+# losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
+
+
+view_test_sample(model1, test_loader)
+
 
 # %%
 # beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-beta = 1
+beta = 100
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
@@ -766,6 +976,12 @@ plot_losses_compare(
 
 
 # %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
+
+# %% [markdown]
 # ### Part A.2.7: Apply the models to test images
 # #### Part A.2.7.1: Get latent space properties
 
@@ -776,10 +992,10 @@ plot_losses_compare(
 # The function returns:
 # | Return value | Shape | Description |
 # |---|---|---|
-# | `mus` | `(10000, 2)` | latent mean for every test image |
-# | `logvars` | `(10000, 2)` | latent log-variance for every test image |
-# | `lbls` | `(10000,)` | digit label for every test image |
-# | `mu_mean` | `(10, 2)` | average latent position per digit class |
+# | `mus` | `(10000, 2) (images, dims)` | latent mean for every test image |
+# | `logvars` | `(10000, 2) (images, dims)` | latent log-variance for every test image |
+# | `lbls` | `(10000,) (images,)` | digit label for every test image |
+# | `mu_mean` | `(10, 2) (digit class, dims)` | average latent position per digit class |
 
 # %%
 def get_latent_features(model, loader):
@@ -812,18 +1028,18 @@ def get_latent_features(model, loader):
 
 #get all latent features
 # model 0 
-mus0, logvars0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
+mus_model0, logvars0, lbls0, mu_mean0 = get_latent_features(model0, tqdm(test_loader))
 
 # model 1 
-mus1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
+mus_model1, logvars1, lbls1, mu_mean1 = get_latent_features(model1, tqdm(test_loader))
 
 
-print(f"mu shape: {mus0.shape}, labels shape: {lbls0.shape}")
+print(f"mu shape: {mus_model0.shape}, labels shape: {lbls0.shape}")
 
 # %% [markdown]
-# #### Part A.2.7.2: Visualize the latent space. 
-# **Let's plot `mu0` and `mu1`.**
-#
+# #### Part A.2.7.2: Visualize the latent spaces. 
+# **Let's plot the two dimensions of the latent space**.  
+# Every data-point represents one test-image. We plot the two latent dimensions (mu₁, mu₂) for `model0` and `model1` 
 
 # %%
 import numpy as np 
@@ -831,7 +1047,7 @@ import numpy as np
 def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1, CMAP = "tab10"):
     """Colour-coded scatter, one series per digit so legend works."""
 
-    CMAP = plt.cm.get_cmap(CMAP)
+    CMAP = plt.get_cmap(CMAP)
 
     for d in range(10):
         mask = lbls == d
@@ -861,12 +1077,12 @@ def scatter_with_normal(ax, mus, lbls, rnd_normal, mean, std):
     ax.set_aspect("equal")
 
 
-def plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1):
+def plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1):
     """Latent space coloured by digit, with per-class centroids."""
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     for ax, mus, lbls, mu_mean, title in [
-        (axes[0], mus0, lbls0, mu_mean0, "β=0 latent space"),
-        (axes[1], mus1, lbls1, mu_mean1, "β=high latent space"),
+        (axes[0], mus_model0, lbls0, mu_mean0, "model0: β=0 latent space"),
+        (axes[1], mus_model1, lbls1, mu_mean1, "model1: β>0 latent space"),
     ]:
         scatter_digits(ax, mus, lbls, mu_mean=mu_mean)
         ax.set_title(title, fontsize=11)
@@ -875,44 +1091,67 @@ def plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1):
     plt.tight_layout(); plt.show()
 
 
-def plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal, mean = 0, std = 1):
-    """Latent space overlaid on N(mean,std) prior."""
+
+
+def plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal,
+                          clf0=None, clf1=None, mean=0, std=1, resolution=500):
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    for ax, mus, lbls, title in [
-        (axes[0], mus0, lbls0, f"β=0 vs N({mean},{std})"),
-        (axes[1], mus1, lbls1, f"β>>0 vs N({mean},{std})"),
+
+    for ax, mus, lbls, clf, title in [
+        (axes[0], mus_model0, lbls0, clf0, f"β=0 vs N({mean},{std})"),
+        (axes[1], mus_model1, lbls1, clf1, f"β>>0 vs N({mean},{std})"),
     ]:
+        # Decision boundaries (if a classifier is provided )
+        if clf is not None:
+            x_min, x_max = mus[:, 0].min() - 0.5, mus[:, 0].max() + 0.5
+            y_min, y_max = mus[:, 1].min() - 0.5, mus[:, 1].max() + 0.5
+            xx, yy = np.meshgrid(np.linspace(x_min, x_max, resolution),
+                                 np.linspace(y_min, y_max, resolution))
+            grid_preds = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+            # ax.contourf(xx, yy, grid_preds, levels=np.arange(-0.5, 10, 1),
+            #             cmap="tab10", alpha=0.25, zorder=0)
+            ax.contour(xx, yy, grid_preds, levels=np.arange(-0.5, 10, 1),
+                       colors="k", linewidths=0.4, zorder=1)
+
+        # Normal prior cloud + latent points
         scatter_with_normal(ax, mus, lbls, rnd_normal, mean, std)
         ax.set_title(title, fontsize=11)
         ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
+
     fig.suptitle(f"Latent space vs N({mean},{std}) prior", fontsize=13)
-    plt.tight_layout(); plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
-# ── call ───────────────────────────────────────────────────────────────────
-plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1)
+
+
+#call
+plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
 
 mean = 0
 std = 1
-plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean, std, size=(10000, 2)), mean = mean, std = std)
+plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=np.random.normal(mean, std, size=(10000, 2)), mean = mean, std = std)
 
 
 # %% [markdown]
-# Each point represents one test image.  
-#
 # **top row**  
-# The marker x shows the per-class centroid – the average mu across all images of that digit. 
+# Each embedded image is color-coded by digit class. The marker x shows the per-class centroid – the average mu across all images of that digit. 
 #
 # **bottom row**  
-# Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution (magenta). 
-#
+# Encoded digits (gray) are overlayed with 10000 samples from a standard normal distribution N(0,1) prior to assess how well the learned latent distribution matches it.
 
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
+# <li>Look at the per-class centroids for a model of your choice. Do you think there's a reason why some centroids are closer to each other, while others are more distant? </li>
 # <li>Which model's latent space is more similar to a standard normal distribution? Why is this the case?</li>
-# <li>Look at the per-class centroids. Do you think there's a reason why some centroids are closer to each other, while others are more distant? </li>
 # </ul>
+# </div>
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
 # </div>
 
 # %% [markdown]
@@ -923,12 +1162,12 @@ plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=np.random.normal(mean
 # So far we have only visualized `mu`, the center of each images distribution in latent space. 
 # The encoder also outputs `logvar`, which controls the spread of each images' distribution. 
 #
-# Below we will sample 50 values `z` from `mu` and `logvar`. 
+# Below we will sample 100 values `z` from `mu` and `logvar`. 
 #
-# So each of the 10000 test-image is represented by 50 points – 50000 points in total. 
+# So each of the 10000 test-image is represented by 100 points – 100000 points in total. 
 
 # %%
-def sample_from_latents(mus, logvars, n_samples=50):
+def sample_from_latents(mus, logvars, n_samples=100):
     """
     For each (mu, logvar) pair, draw n_samples via the reparameterization trick.
     Returns z_samples of shape (N * n_samples, 2).
@@ -948,8 +1187,8 @@ def sample_from_latents(mus, logvars, n_samples=50):
 n_samples = 100
 
 with torch.no_grad():
-    z_samples0 = sample_from_latents(mus0, logvars0, n_samples)
-    z_samples1 = sample_from_latents(mus1, logvars1, n_samples)
+    z_samples0 = sample_from_latents(mus_model0, logvars0, n_samples)
+    z_samples1 = sample_from_latents(mus_model1, logvars1, n_samples)
 
 # repeat each label n_samples times to match the expanded z array
 lbls0_rep = lbls0.repeat_interleave(n_samples)
@@ -960,12 +1199,12 @@ fig, axes = plt.subplots(1, 2, figsize=(13, 7))
 
 ax = axes[0]
 scatter_digits(ax, z_samples0.numpy(), lbls0_rep, mu_mean=mu_mean0, alpha = 0.1)
-ax.set_title("β=0 — 50 samples per posterior", fontsize=11)
+ax.set_title("β=0 — 100 samples per posterior", fontsize=11)
 ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
 
 ax = axes[1]
 scatter_digits(ax, z_samples1.numpy(), lbls1_rep, mu_mean=mu_mean1, alpha = 0.1)
-ax.set_title("β=high — 50 samples per posterior", fontsize=11)
+ax.set_title("β=high — 100 samples per posterior", fontsize=11)
 ax.set_xlabel("z₁"); ax.set_ylabel("z₂")
 
 plt.suptitle("Sampled z", fontsize=13)
@@ -975,12 +1214,19 @@ plt.show()
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
-# <li>Which latent space is more continuous? </li>
+# <li>Which latent space looks more continuous? </li>
+# <li>Why is it important that the latent space follows a known distribution?</li>
 # </ul>
 # </div>
 
 # %% [markdown]
-# #### Part A.2.7.3: Clustering the latent space
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
+
+# %% [markdown]
+# #### Part A.2.7.3: Classification in the latent space
 # The previous plots show clusters of numbers emerging. But can we quantify how well these clusters are separated? 
 #
 # Next, we train a **logistic regression classifier** on the latent space. 
@@ -1021,8 +1267,48 @@ def logreg(mus, lbls, test_size=0.2, random_state=42):
 
     return accuracy, unique_lbls, conf_m, clf
 
-accuracy0, unique_lbls0, conf_m0, clf0 = logreg(mus0, lbls0)
-accuracy1, unique_lbls1, conf_m1, clf1 = logreg(mus1, lbls1)
+accuracy0, unique_lbls0, conf_m0, clf0 = logreg(mus_model0, lbls0)
+accuracy1, unique_lbls1, conf_m1, clf1 = logreg(mus_model1, lbls1)
+
+
+# %% [markdown]
+# We can visualize the decision boundaries: 
+
+# %%
+def plot_decision_boundaries(ax, clf, mus, lbls, title, resolution=500, CMAP="tab10"):
+    """Shade decision regions of a fitted classifier over the 2-D latent space."""
+    CMAP_obj = plt.get_cmap(CMAP)
+
+    x_min, x_max = mus[:, 0].min() - 0.5, mus[:, 0].max() + 0.5
+    y_min, y_max = mus[:, 1].min() - 0.5, mus[:, 1].max() + 0.5
+
+    xx, yy = np.meshgrid(
+        np.linspace(x_min, x_max, resolution),
+        np.linspace(y_min, y_max, resolution)
+    )
+
+    grid_preds = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+    # Shade decision regions (low alpha so data points stay visible)
+    ax.contourf(xx, yy, grid_preds, levels=np.arange(-0.5, 10, 1),
+                cmap=CMAP, alpha=0.25, zorder=0)
+
+    # Draw crisp decision boundaries
+    ax.contour(xx, yy, grid_preds, levels=np.arange(-0.5, 10, 1),
+               colors="k", linewidths=0.4, zorder=1)
+
+    # Overlay data points
+    scatter_digits(ax, mus, lbls)
+    ax.set_title(title, fontsize=11)
+    ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
+    ax.set_xlim(x_min, x_max); ax.set_ylim(y_min, y_max)
+
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+plot_decision_boundaries(axes[0], clf0, mus_model0.numpy(), lbls0.numpy(), "β=0 — decision boundaries")
+plot_decision_boundaries(axes[1], clf1, mus_model1.numpy(), lbls1.numpy(), "β>0 — decision boundaries")
+fig.suptitle("Logistic-regression decision boundaries in latent space", fontsize=13)
+plt.tight_layout(); plt.show()
 
 
 # %% [markdown]
@@ -1051,16 +1337,19 @@ plt.suptitle("Logistic Regression on Latent Space (μ₁, μ₂)", fontsize=13)
 plt.tight_layout()
 plt.show()
 
-
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
-#
-# * Question: is one classification better than the other? If so – why? 
-# * Does this mean the model that results in a better classification is the better model? 
+# * Question: is one classification better than the other?  <br>
+# * If so, why do you think is the classification accuracy higher in one model than in the other?  
 # </ul>
 # </div>
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
 #
+#
+# </div>
 
 # %% [markdown]
 # ### A.2.8. Sample from the latent space
@@ -1076,7 +1365,8 @@ plt.show()
 
 # %%
 # Uncomment and run if you want to see the latent-space again: 
-# plot_latent_digits(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1)
+plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
+
 
 # %%
 # Plot average latent vectors 
@@ -1093,41 +1383,41 @@ def gen_mean_numbers(model, mu_mean, title):
     plt.tight_layout()
 
 
-#gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
+# gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
 gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 
 # %% [markdown]
 # #### Interpolate between digits in the latent space 
-# Above, we have seen "mean" representations for each digit. 
-# We can now sample in a straight line between two such mean digits and observe how the reconstructions changes. 
-#
+# Above, we have seen "mean" representations for each digit, corresponding to centroids of each digit class in the latent space.  
+# We can decode points sampled along the straight line between two centroids in latent space. A visualization will be plotted below.  
 #
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
-# If your latent spaces permit, pick two digits that connect in a straight line. Observe the results. <br>  
+# Run the code below without modifications. You should see reconstructions of interpolated images along the path between the centroids of 0 and 6. <br> 
+# Next, choose your own two digit centroids. Latent space permitting, try three types of paths:
 #
-# * with gaps in-between <br>  
-# * traversing other digits<br>  
-# * without gaps and without traversing other digits.   <br>  
+# * Gap — the line passes through an empty region of the latent space   <br>  
+# * Traversal — the line passes through one or more other digit clusters<br>  
+# * Clean — the line connects two digits directly, with no gaps and no other clusters in between<br>  
 #
 #
-# Can you explain the generated images?
+# For each case: can you explain what the decoded images look like, and why?
 # </div>
 
 # %%
 # TODO: pick digits 
-digit_a = 1
-digit_b = 7
+digit_a = 0
+digit_b = 6
 steps = 12 # number of times to sample 
 
 
-def plot_latent_digits_interp(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1, digit_a, digit_b):
+def plot_latent_digits_interp(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1, digit_a, digit_b):
     """Latent space coloured by digit, with a line connecting two class centroids."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     for ax, mus, lbls, mu_mean, title in [
-        (axes[0], mus0, lbls0, mu_mean0, "β=0 latent space"),
-        (axes[1], mus1, lbls1, mu_mean1, "β=high latent space"),]:
+        (axes[0], mus_model0, lbls0, mu_mean0, "β=0 latent space"),
+        (axes[1], mus_model1, lbls1, mu_mean1, "β=high latent space"),]:
         scatter_digits(ax, mus, lbls, mu_mean=mu_mean)
 
         # ── line between the two class centroids ──────────────────────────
@@ -1165,10 +1455,10 @@ def interpolate(digit_a, digit_b, mu_mean, model, title, steps = 10):
 
 
 
-plot_latent_digits_interp(mus0, lbls0, mu_mean0, mus1, lbls1, mu_mean1, digit_a=digit_a, digit_b=digit_b)
+plot_latent_digits_interp(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1, digit_a=digit_a, digit_b=digit_b)
 
 interpolate(digit_a, digit_b, mu_mean0, model0, "Beta = 0", steps = steps)
-interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
+interpolate(digit_a, digit_b, mu_mean1, model1, "Beta > 0", steps = steps)
 
 # %% [markdown]
 # #### Sampling from the latent space 
@@ -1176,39 +1466,28 @@ interpolate(digit_a, digit_b, mu_mean1, model1, "Beta >> 0", steps = steps)
 # So far, we've sampled from the latent space based on rules defined by landmarks, notably the mean representation of each digit. 
 # Now, we will sample randomly. 
 #
-# We draw 10000 points from a **standard normal distribution** and pass them through the decoder of `model0` and `model1` to generate 10000 images. 
+# We draw 10000 points from a **standard normal distribution** (Which is the same distribution as the one enforced by the KL loss) and pass them through the decoder of `model0` and `model1` to generate 10000 images. 
 # We will display the first 10 samples.    
 # We also use the logistic regression classifiers trained on `model0` and `model1` to predict which digit a randomly sampled point corresponds to in the latent space of `model0` and `model1` respectively. 
 #
 # The bar chart in the last column shows the distribution of predicted classes across all 10000 samples 
 
-# %% [markdown]
-# <div class="alert alert-block alert-warning"><h4> Questions </h4>
-# <ul>
-#
-# * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
-# * What would a perfectly uniform distributiont tell us about the latent space? 
-# * Devil's advocate: Why don't we just change the distribution to better fit the latent space?  
-#
-# </ul>
-# </div>
-
-# %% [markdown]
-# <div class="alert alert-block alert-info"><h2>Task</h2>
-# Change MEAN and/or STD to sample from outside of the latent space distribution 
-# </div>
-
 # %%
-MEAN = 0
-STD = 1
+MEAN_0 = 0
+MEAN_1 = 0
 
+STD_0 = 1
+STD_1 = 1
+
+mean = np.array([MEAN_0, MEAN_1])   # one mean per latent dimension
+std  = np.array([STD_0, STD_1])   # one std  per latent dimension
 
 n = 10000
 latent_dims = 2
 
-random_latent = np.random.normal(MEAN, STD, size=(n, latent_dims))
+random_latent = np.random.normal(mean, std, size=(n, latent_dims))
 
-plot_latent_vs_normal(mus0, lbls0, mus1, lbls1, rnd_normal=random_latent, mean = MEAN, std = STD)
+plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=random_latent, mean = mean, std = std)
 
 with torch.no_grad():
 
@@ -1220,28 +1499,51 @@ with torch.no_grad():
     gen_labels_1 = clf1.predict(random_latent)
 
 
-n_show = 10
-fig, ax = plt.subplots(2, n_show + 1, figsize = (20, 4))
-for i in range(n_show):
-    ax[0, i].imshow(gen_0[i].cpu().detach().squeeze(), cmap = "grey")
-    ax[0, i].set_title(gen_labels_0[i])
-
-    ax[1, i].imshow(gen_1[i].cpu().detach().squeeze(), cmap = "grey")
-    ax[1, i].set_title(gen_labels_1[i])
 
 
-for row, gen, labels, title in [
-    (0, gen_0, gen_labels_0, "β=0"),
-    (1, gen_1, gen_labels_1, "β>>1"),
-]:
-    for i in range(n_show):
-        ax[row, i].imshow(gen[i].cpu().detach().squeeze(), cmap="gray")
-        ax[row, i].set_title(labels[i])
+def plot_generated(gen_0, gen_labels_0, gen_1, gen_labels_1, title0="β=0", title1="β>>0", n_show=10):
+    fig, ax = plt.subplots(2, n_show + 1, figsize=(20, 4))
 
-    ax[row, n_show].bar(range(10), np.bincount(labels, minlength=10))
-    ax[row, n_show].set(xticks=range(10), xlabel="Digit", title=title)
+    for row, gen, labels, title in [
+        (0, gen_0, gen_labels_0, title0),
+        (1, gen_1, gen_labels_1, title1),
+    ]:
+        for i in range(n_show):
+            ax[row, i].imshow(gen[i].cpu().detach().squeeze(), cmap="gray")
+            ax[row, i].set_title(labels[i])
+            ax[row, i].axis("off")
 
-plt.tight_layout()
+        ax[row, n_show].bar(range(10), np.bincount(labels, minlength=10))
+        ax[row, n_show].set(xticks=range(10), xlabel="Digit", title=title)
+
+        # Row title in the figure margin
+        fig.text(0.01, 0.75 - row * 0.5, title, fontsize=12,
+                 fontweight="bold", va="center", rotation="vertical")
+
+        plt.tight_layout(rect=[0.03, 0, 1, 1])  # leave space on the left for titles
+
+
+plot_generated(gen_0, gen_labels_0, gen_1, gen_labels_1)
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h4> Questions </h4>
+# <ul>
+#
+# * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
+# * What would a perfectly uniform distribution in the bar chart tell us about the latent space? 
+# </ul>
+# </div>
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task</h2>
+# Change MEAN and/or STD to sample from outside of the latent space distribution 
+# </div>
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
 
 # %% [markdown]
 # ## A.2.9: Higher-dimensional latent-spaces
@@ -1274,6 +1576,12 @@ epochs = 1000
 beta = 1 
 
 train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
+
+# %% [markdown]
+# Let's have a look at a few reconstructions: 
+
+# %%
+view_test_sample(model2, test_loader)
 
 # %% [markdown]
 # Let's fast-forwarde – get latent features
@@ -1356,6 +1664,12 @@ confmatrix(axes, conf_m2, accuracy2, unique_lbls2, title= f"β=1, latent_dims = 
 plt.suptitle("Logistic Regression on Latent Space ", fontsize=13)
 plt.tight_layout()
 plt.show()
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+#
+#
+# </div>
 
 # %% [markdown]
 # ## Part A.3: Contrastive learning
