@@ -362,7 +362,7 @@ class VariationalAutoEncoder(nn.Module):
         ... = ...(z)           # TODO      
         return xx, z, mu, logvar
 
-# %%
+# %% tags=["solution"]
 import torch
 
 class VariationalAutoEncoder(nn.Module):
@@ -531,7 +531,7 @@ def loss(rec, kl, beta):
     return ... 
 
 
-# %%
+# %% tags=["solution"]
 def loss(rec, kl, beta):
     return rec + beta * kl
 
@@ -727,7 +727,7 @@ print(example_tensor.nbytes)
 # TODO: 
 ...
 
-# %%
+# %% tags=["solution"]
 example_tensor = torch.zeros(1)
 print(example_tensor.nbytes)
 
@@ -873,7 +873,7 @@ optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 ... 
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
-# %%
+# %% tags=["solution"]
 
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
@@ -928,12 +928,12 @@ beta = 0
 view_test_sample(model1, test_loader)
 
 
-# %%
+# %% tags=["solution"]
 # beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-beta = 100
+beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
@@ -1461,85 +1461,6 @@ interpolate(digit_a, digit_b, mu_mean0, model0, "Beta = 0", steps = steps)
 interpolate(digit_a, digit_b, mu_mean1, model1, "Beta > 0", steps = steps)
 
 # %% [markdown]
-# #### Sampling from the latent space 
-#
-# So far, we've sampled from the latent space based on rules defined by landmarks, notably the mean representation of each digit. 
-# Now, we will sample randomly. 
-#
-# We draw 10000 points from a **standard normal distribution** (Which is the same distribution as the one enforced by the KL loss) and pass them through the decoder of `model0` and `model1` to generate 10000 images. 
-# We will display the first 10 samples.    
-# We also use the logistic regression classifiers trained on `model0` and `model1` to predict which digit a randomly sampled point corresponds to in the latent space of `model0` and `model1` respectively. 
-#
-# The bar chart in the last column shows the distribution of predicted classes across all 10000 samples 
-
-# %%
-MEAN_0 = 0
-MEAN_1 = 0
-
-STD_0 = 1
-STD_1 = 1
-
-mean = np.array([MEAN_0, MEAN_1])   # one mean per latent dimension
-std  = np.array([STD_0, STD_1])   # one std  per latent dimension
-
-n = 10000
-latent_dims = 2
-
-random_latent = np.random.normal(mean, std, size=(n, latent_dims))
-
-plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=random_latent, mean = mean, std = std)
-
-with torch.no_grad():
-
-    gen_0 = model0.decode(torch.Tensor(random_latent).to(device))
-    gen_labels_0 = clf0.predict(random_latent)
-
-
-    gen_1 = model1.decode(torch.Tensor(random_latent).to(device))
-    gen_labels_1 = clf1.predict(random_latent)
-
-
-
-
-def plot_generated(gen_0, gen_labels_0, gen_1, gen_labels_1, title0="β=0", title1="β>>0", n_show=10):
-    fig, ax = plt.subplots(2, n_show + 1, figsize=(20, 4))
-
-    for row, gen, labels, title in [
-        (0, gen_0, gen_labels_0, title0),
-        (1, gen_1, gen_labels_1, title1),
-    ]:
-        for i in range(n_show):
-            ax[row, i].imshow(gen[i].cpu().detach().squeeze(), cmap="gray")
-            ax[row, i].set_title(labels[i])
-            ax[row, i].axis("off")
-
-        ax[row, n_show].bar(range(10), np.bincount(labels, minlength=10))
-        ax[row, n_show].set(xticks=range(10), xlabel="Digit", title=title)
-
-        # Row title in the figure margin
-        fig.text(0.01, 0.75 - row * 0.5, title, fontsize=12,
-                 fontweight="bold", va="center", rotation="vertical")
-
-        plt.tight_layout(rect=[0.03, 0, 1, 1])  # leave space on the left for titles
-
-
-plot_generated(gen_0, gen_labels_0, gen_1, gen_labels_1)
-
-# %% [markdown]
-# <div class="alert alert-block alert-warning"><h4> Questions </h4>
-# <ul>
-#
-# * Look at the bar charts. Is the distribution of predicted classes uniform? Which model has a *more* uniform distribution? 
-# * What would a perfectly uniform distribution in the bar chart tell us about the latent space? 
-# </ul>
-# </div>
-
-# %% [markdown]
-# <div class="alert alert-block alert-info"><h2>Task</h2>
-# Change MEAN and/or STD to sample from outside of the latent space distribution 
-# </div>
-
-# %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
 #
 #
@@ -1567,6 +1488,17 @@ plot_generated(gen_0, gen_labels_0, gen_1, gen_labels_1)
 #
 
 # %%
+latent_dim = ...
+
+model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
+optimizer = Adam(model2.parameters(), lr = 0.0001)
+
+epochs = 1000
+beta = 1 
+
+train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
+
+# %% tags=["solution"]
 latent_dim = 99
 
 model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
