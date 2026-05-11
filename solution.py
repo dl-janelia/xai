@@ -309,7 +309,7 @@ class MLP(nn.Module):
 #
 #
 
-# %%
+# %% tags=["task"]
 import torch
 
 class VariationalAutoEncoder(nn.Module):
@@ -526,7 +526,7 @@ def kl_loss(mu, logvar):
 # Write code that weights the kl loss by beta and adds it to the reconstruction loss  
 # </div>
 
-# %%
+# %% tags=["task"]
 def loss(rec, kl, beta):
     return ... 
 
@@ -719,7 +719,7 @@ print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
 # Compute the size of <code>mu</code> and the size of <code>logvar</code>. Print their sum.  <br>
 # Which is bigger: the input image, or its latent space embedding? 
 
-# %%
+# %% tags=["task"]
 #Example: 
 example_tensor = torch.zeros(1)
 print(example_tensor.nbytes)
@@ -865,7 +865,7 @@ view_test_sample(model, test_loader)
 # </div>
 #
 
-# %%
+# %% tags=["task"]
 
 model0 = VariationalAutoEncoder(...).to(device)  # TODO 
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
@@ -917,7 +917,7 @@ view_test_sample(model0, test_loader)
 # * You can train for fewer epochs if you want to try multiple values. Train for 1000 epochs once you decided 
 # </div>
 
-# %%
+# %% tags=["task"]
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
@@ -1529,7 +1529,7 @@ decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, 
 # </div>
 #
 
-# %%
+# %% tags=["task"]
 latent_dim = ...
 
 model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
