@@ -922,10 +922,9 @@ model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
 beta = 0
-# losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
+losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
-view_test_sample(model1, test_loader)
 
 
 # %% tags=["solution"]
@@ -937,6 +936,10 @@ beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
+# %% [markdown]
+# Let's have a look at reconstructions for model1: 
+
+# %%
 view_test_sample(model1, test_loader)
 
 
@@ -1461,6 +1464,45 @@ interpolate(digit_a, digit_b, mu_mean0, model0, "Beta = 0", steps = steps)
 interpolate(digit_a, digit_b, mu_mean1, model1, "Beta > 0", steps = steps)
 
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Bonus task</h2>
+# Change coordinates <code>z = [mu₁, mu₂]</code> to decode any point in the latent spaces.  <br>
+# <code>z</code> will appear as a magenta star.  
+# </div>
+
+# %%
+# TODO: pick a point in the latent space
+MU1 = -20
+MU2 = -12
+z = [MU1, MU2] 
+
+def decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1):
+    z_tensor = torch.tensor(z, dtype=torch.float32).unsqueeze(0).to(device)
+
+    fig, axes = plt.subplots(1, 4, figsize=(12, 8))
+
+    for ax_scatter, ax_img, model, mus, lbls, mu_mean, title in [
+        (axes[0], axes[1], model0, mus_model0, lbls0, mu_mean0, "β=0"),
+        (axes[2], axes[3], model1, mus_model1, lbls1, mu_mean1, "β>0"),
+    ]:
+        # latent space with marked point
+        scatter_digits(ax_scatter, mus, lbls, mu_mean=mu_mean)
+        ax_scatter.scatter(*z, s=200, color="magenta", marker="*", zorder=20)
+        ax_scatter.set_title(f"{title} latent space")
+        ax_scatter.set_xlabel("mu₁"); ax_scatter.set_ylabel("mu₂")
+
+        # decoded image
+        with torch.no_grad():
+            gen = model.decode(z_tensor)
+        ax_img.imshow(gen.cpu().squeeze(), cmap="gray")
+        ax_img.set_title(f"{title} decoded")
+        ax_img.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
+
+# %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
 #
 #
@@ -1603,12 +1645,6 @@ plt.show()
 #
 # </div>
 
-# %% [markdown]
-# ## Part A.3: Contrastive learning
-#
-#
-#
-#
 # %% [markdown]
 # # PART B: Explainable AI (XAI)
 # ## Part B.1: Setup
