@@ -9,7 +9,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.2
+#       jupytext_version: 1.19.2
 #   kernelspec:
 #     display_name: 07_xai
 #     language: python
@@ -24,7 +24,7 @@
 # from increasingly high-dimensional and complex data. Yet as these models become more capable, understanding what they are actually learning becomes
 # just as important as their predictive performance, and that is precisely the role of explainable AI.
 #
-# Goal of the exercises
+# ### Goal of the exercises
 #
 # The goal of this exercise is to first build an understanding of what representation learning is,
 # what we mean by a "representation" in that context, and what makes a representation good or useful.  
@@ -95,12 +95,12 @@
 #
 # **Compact**  
 # Later, we will see example images of MNIST – 28 x 28 images of hand-written digits on dark background.  
-# We can view each image as existing in an 28 x 28 = 784 - dimensional space. However, most of the image carries irrelevant information. 
+# Each image provides 28 x 28 = 784 pixel values. However, most of these values carry irrelevant information. 
 # For instance, most pixels belong to the dark background that does not contain infromation about the imaged digit.  
 # By keeping a representation compact (but not too compact!), we force the model to discard irrelevant information. 
 #
 # **Smooth and continuous**  
-# Small changes in the input should lead to small changes in the representation. There should be no "gaps" in the representation.  
+# Small changes in the input should lead to small changes in the representation. Ideally, there should be no "gaps" in the representation (this is the case for probabilistic models like Variational AutoEncoders).  
 # This property makes it possible to generate new data from the representation, as each location in the latent space contains meaningful information.  
 #
 # **Structured**  
@@ -146,8 +146,8 @@
 import torchvision
 
 transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-train_mnist = torchvision.datasets.MNIST("./mnist", train=True, download=False, transform=transform)
-test_mnist = torchvision.datasets.MNIST("./mnist", train=False, download=False, transform=transform)
+train_mnist = torchvision.datasets.MNIST("./mnist", train=True, download=True, transform=transform)
+test_mnist = torchvision.datasets.MNIST("./mnist", train=False, download=True, transform=transform)
 
 # %% [markdown]
 # <div class="alert alert-info">
@@ -214,8 +214,14 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # |---|---|---|
 # | Image shape | `(1, 28, 28)` | `(8, 1, 28, 28)` |
 # | Dimensions  | Channel, Height (Y), Width (X) | Batch, Channel, Height (Y), Width (X) |
-# | Label | scalar `int` | `tensor` of size `batch_size` (8) |
+# | Label | scalar `int` | `tensor` of `batch_size` (8) `int` |
 # | Batch dimension | ❌ | ✅ (size = `batch_size`) |
+
+# %% [markdown]
+# <div class="alert alert-info">
+#     <b>Note:</b> the term <em>dimension</em> is used throughout this exercise in roughly 2 ways. One is engineering-centric and pertains to the structure of tensor objects, specifying how the data is laid out (<em>e.g. dataloader iterator, 4-dimensional tensors with a batch dimension, a channel dimension, a height dimension and a width dimension</em>). The other use refers to the mathematical spaces that the data exists in (<em>e.g. 2-d images of 28x28=784 pixels are viewed as vectors in 784 dimensions, latent vectors from a latent space may have only 256 feature dimensions</em>).<br>
+#     Mind the context to avoid miss understandings.
+# </div>
 
 # %% [markdown]
 # ## Part A.2: Variational Autoencoders (VAE)
@@ -265,9 +271,9 @@ class MLP(nn.Module):
 #
 # **The reparametrization trick**: 
 # * Allows to sample the latent variable `z` as it if came from a Normal distribution with `mu` and $std = e^{logvar/2}$  
-# * However, sampling `z` from `mu` and `std` does not allow for backpropagation
-# * To allow for backpropagation, the model samples $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
-# * And then samples z with the help of $\epsilon$: $z = mu + \epsilon * e^{logvar/2}$
+# * However, sampling `z` directly from `mu` and $std$(`logvar`) does not allow for backpropagation (random sampling is not differentiable)
+# * To allow for backpropagation, we isolate the non-differentiable random sampling node and sample $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
+# * We then use this $\epsilon$ to produce `z`: `z` $=$ `mu` $+ \epsilon * e^{logvar/2}$ (here, gradient can flow through `mu` and `logvar`)
 #
 # **The decode function**: 
 # * Takes in a latent vector `z` and uses an MLP to reconstruct the original sample, reshaping as appropriate.
@@ -583,13 +589,13 @@ optimizer = Adam(model.parameters(), lr=0.0001)
 # %% [markdown]
 # #### Part A.2.3.3: The training "loop"
 # To train a model, the general idea is to iterate through the dataset, passing each element through the model to produce a reconstruction and embed it into the latent space.  
-# We observe how close to the original data and the reconstruction is using the reconstruction loss function, and use that observation to inform the model optimisation.  
+# We observe how close to the original data the reconstruction is using the reconstruction loss function, and use that observation to inform the model optimisation.  
 # We penalize the latent space for not following a standard normal distribution using the KL-loss.  
 # Performing these steps going once through all the training data is what is referred to as a training **epoch**. 
 # We then loop this process over for a desired arbitrary number of training epochs.  
 #
 # Below are three functions:  
-# `train_epoch`: capture training for a single epoch and which returns the average epoch loss.  
+# `train_epoch`: Captures training for a single epoch and returns the average epoch loss.  
 # `train_epochs`: Calls `train_epoch` for the desired number of epochs and returns the losses per epoch.  
 # `plot_losses_live`: Plots losses during training and live-updates every few epochs.   
 # %%
@@ -989,7 +995,7 @@ plot_losses_compare(
 # #### Part A.2.7.1: Get latent space properties
 
 # %% [markdown]
-# Previously, we encoded one image into the latent space. Now we will encode the the entire test set. 
+# Previously, we encoded a few images into the latent space. Now we will encode the the entire test set. 
 # Below is a function that receives a model and a dataloader. 
 #
 # The function returns:
@@ -1356,7 +1362,7 @@ plt.show()
 
 # %% [markdown]
 # ### A.2.8. Sample from the latent space
-# So far, we have looked at the latent space. Next, we look at what the decoder produces given positions in the latent space 
+# So far, we have looked at the latent space. Next, we look at what the decoder produces when given a latent vector.
 
 # %% [markdown]
 # Function `gen_mean_numbers` takes `mu_mean`, the average latent position of all test images of digit i. 
@@ -1558,7 +1564,7 @@ train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
 view_test_sample(model2, test_loader)
 
 # %% [markdown]
-# Let's fast-forwarde – get latent features
+# Let's fast-forward – get latent features
 
 # %%
 mus2, logvars2, lbls2, mu_mean2 = get_latent_features(model2, tqdm(test_loader))
@@ -1649,7 +1655,7 @@ plt.show()
 # # PART B: Explainable AI (XAI)
 # ## Part B.1: Setup
 #
-# In this part of the notebook, we will load the same dataset as in the previous exercise.
+# In this part of the notebook, we will use the colored MNIST dataset.
 # We will also learn to load one of our trained classifiers from a checkpoint.
 
 # %%
