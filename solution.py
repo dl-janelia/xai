@@ -227,6 +227,7 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # ## Part A.2: Variational Autoencoders (VAE)
 # A Variational Autoencoder (VAE) is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.
 # The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.
+# <p align="center"><img src="assets/vae.svg" width="50%"></p>
 # In our case, we convert `28 * 28 = 784` pixel images into a **few** core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
 # ### Part A.2.1: The architecture of our VAE
@@ -492,12 +493,6 @@ def test_vae(w=28, h=28, latent_dim=16, batch_size=8):
 test_vae()
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
-#
-#
-# </div>
-
-# %% [markdown]
 # ### Part A.2.2: The loss functions
 # Training a VAE balances two competing objectives:
 #
@@ -544,8 +539,17 @@ def loss(rec, kl, beta):
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Refreshed our acquaintance with MNIST
+# - Explained how the dataset and dataloaders are used to iterate through large amounts of data in a structured manner
+# - Familiarised ourselves with the MLP
+# - Familiarised ourselves with the VAE model we are going to train
+# - Prepared a composite loss, with a reconstruction term and a KLD term
+#
+# Next we will train our model.
 # </div>
 
 # %% [markdown]
@@ -719,7 +723,7 @@ print(f"mu    : {mu}. Dimensions: {len(mu[0])}")
 print(f"logvar: {logvar}. Dimensions: {len(logvar[0])}")
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task: Compare size of an inpute image to the latent space</h3>
+# <div class="alert alert-block alert-info"><h3>Task: Compare size of an input image to the latent space</h3>
 # The function <code>.nbytes</code> allows you to see the size of an array or tensor in bytes.  <br>
 # Print the size of <code>x</code>.  <br>
 # Compute the size of <code>mu</code> and the size of <code>logvar</code>. Print their sum.  <br>
@@ -845,10 +849,18 @@ view_test_sample(model, test_loader)
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Instanciated our model and an optimizer
+# - Provided a training loop which goes through the data samples, run the model, and steps the optimizer to update the model's parameters
+# - Trained the model for a few "epochs" through all the training samples and observed the loss values
+# - Inspected mu and logvar produced by the encoder
+# - Inspected the reconstructions produced by the decoder
 #
-#
+# Next we will train our model for a larger number of epochs.
+# </div>
 
 # %% [markdown]
 # ### Part A.2.6: Train two models for 1000 epochs
@@ -903,8 +915,14 @@ view_test_sample(model0, test_loader)
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Trained the model for a large number of epochs
+# - Observed several reconstructions, comparing we previously obtained results
+#
+# Next we will attempt to regularize the model's latent space.
 # </div>
 
 # %% [markdown]
@@ -986,8 +1004,14 @@ plot_losses_compare(
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Trained another model on our dataset
+# - Observed how changing the beta parameter in the composite loss (the factor in front of the KLD term) affects the overall loss
+#
+# Next we will use our trained model to explore a set of test images (not yet seen by the model) and explore obtained results.
 # </div>
 
 # %% [markdown]
@@ -1159,8 +1183,14 @@ plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=np.random
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Extracted 2-d latent features for test images for both our trained models
+# - Visualised the extracted 2-d mean features and discussed classes distributions
+#
+# Next we will explore 2-d logvars.
 # </div>
 
 # %% [markdown]
@@ -1230,8 +1260,14 @@ plt.show()
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Visualised extracted 2-d logvars
+# - Discussed how beta affects the latent space
+#
+# Next we will explore classification using extracted latent features.
 # </div>
 
 # %% [markdown]
@@ -1356,8 +1392,15 @@ plt.show()
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Trained a logistic regression classifier using the extracted mean latent features
+# - Presented how the classifier divides the space showing decision boundaries overlaid on top of our latent space visualisation
+# - Presented a confusion matrix to establish the accuracy reached thanks to our latent space (contrasting results with and without KLD regularisation)
+#
+# Next we will explore sampling from the latent space directly.
 # </div>
 
 # %% [markdown]
@@ -1510,8 +1553,15 @@ decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, 
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Sampled arbitrary points in the latent space (even points <b>not</b> corresponding to existing images)
+# - Produced a reconstruction image for the sampled points
+# - Discussed on the observed digits
+#
+# Next we will expand the dimensionality of our latent space.
 # </div>
 
 # %% [markdown]
@@ -1647,8 +1697,14 @@ plt.show()
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# Let us know when you've reached this point!
 #
+# At this point we have:
 #
+# - Trained a new model with a (relatively) large amount of latent features
+# - Discussed the options to visualise such a high-dimensional space, and provided a UMAP-based visualisation
+#
+# We have now finished PART A about representation learning. Take a break and return for PART B about explainable AI.
 # </div>
 
 # %% [markdown]
