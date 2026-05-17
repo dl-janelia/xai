@@ -2504,12 +2504,7 @@ plt.show()
 
 # %% [markdown] tags=[]
 # GANs are hard... and yours might not have worked out! If you've made it this far I hope you tried a few times 😉.
-# If it *still* doesn't work, uncomment the two lines in the next cell to get a model that we pre-trained for you.
 
-# %% tags=[]
-# weights = torch.load("/mnt/efs/aimbl_2025/xai/stargan_checkpoint.pth")
-# generator.load_state_dict(weights["generator"])
-# generator_ema.load_state_dict(weights["generator_ema"])
 # %% [markdown] tags=[]
 # ## Creating counterfactuals
 #
@@ -2757,7 +2752,7 @@ for idx in range(batch_size):
         )
 # %% [markdown]
 # Take some time to look at the plot we just made.
-# On the very left are the images we randomly chose - it's class is shown in the title.
+# On the very left are the images we randomly chose - each image's class is shown in the title.
 # On the very right are the counterfactual images, all of them made with the same prototype as a style source - the target class is shown in the title.
 # In between are the interpolated images - their title shows their classification as "source classification | target classification".
 # This is a lot to take in, so take your time! Once you're ready, we can move on to the questions.
@@ -2825,6 +2820,11 @@ plt.show()
 # Let's use the style space to color the PCA plot.
 # (Note: there is no code to write here, just run the cell and answer the questions below)
 # </div>
+# %% [markdown]
+# <div class="alert alert-block alert-warning">
+# <b>🚨WARNING🚨</b> Pay attention to the markers' shapes in the legend and on the plot to avoid confusion when reading the plots (in particular, in the next plot. colour carries meaning different to that of the markers' shapes).
+# </div>
+
 # %%
 styles = np.array(styles)
 normalized_styles = (styles - np.min(styles, axis=1, keepdims=True)) / np.ptp(
@@ -2950,7 +2950,6 @@ plt.show()
 # If you have extra time, you can try to break the StarGAN!
 # There are a lot of little things that we did to make sure that it runs correctly - but what if we didn't?
 # Some things you might want to try:
-# <li> What happens if you don't use the EMA model? </li>
 # <li> What happens if you change the learning rates? </li>
 # <li> What happens if you add a Sigmoid activation to the output of the style encoder? </li>
 # See what else you can think of, and see how finnicky training a GAN can be!
@@ -2993,6 +2992,3 @@ def plot_color_gradients(cmap_list):
 
 
 plot_color_gradients(["spring", "summer", "autumn", "winter"])
-
-# %%
-
