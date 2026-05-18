@@ -505,14 +505,24 @@ test_vae()
 # #### Latent space regularization
 # **Kullback-Leibler divergence** loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
 # KL-loss penalizes the latent space distribution for being different from a standard normal.
+#
+# <div class="alert alert-info">
+# <b>Convention used here:</b> both losses sum across their per-image dimensions (pixels for
+# reconstruction, latent dimensions for KL) and then take the mean across the batch.
+# Keeping both losses on a "per-image" scale makes the <code>beta</code> trade-off below interpretable
+# and independent of <code>batch_size</code>.
+# </div>
 # %%
-# The reconstruction loss
-rec_loss = nn.BCELoss(reduction="sum")
+# The reconstruction loss: sum over the 784 pixels, mean over the batch
+_bce_per_pixel = nn.BCELoss(reduction="none")
+def rec_loss(xx, x):
+    # sum over pixel dims, mean over batch — matches the kl_loss reduction
+    per_image = _bce_per_pixel(xx, x).flatten(start_dim=1).sum(dim=1)
+    return per_image.mean()
 
 
-# The KL loss
+# The KL loss: sum over latent dimensions, mean over batch
 def kl_loss(mu, logvar):
-    # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1))
 
 
@@ -598,10 +608,18 @@ optimizer = Adam(model.parameters(), lr=0.0001)
 # Performing these steps going once through all the training data is what is referred to as a training **epoch**.
 # We then loop this process over for a desired arbitrary number of training epochs.
 #
+# <div class="alert alert-info">
+# <b>Note on "mini-epochs":</b> a full pass over MNIST's 60,000 training images takes a while on CPU.
+# To keep training snappy, each training step below uses a <b>"mini-epoch"</b> of <code>steps_per_epoch=100</code>
+# mini-batches (≈ 800 images with <code>batch_size=8</code>), rather than the full training set.
+# When we say "1000 epochs" later, we therefore mean 1000 mini-epochs.
+# In a real project you would use full epochs — we use mini-epochs here purely to fit within the exercise time-budget.
+# </div>
+#
 # Below are three functions:
 # `train_epoch`: Captures training for a single epoch and returns the average epoch loss.
-# `train_epochs`: Calls `train_epoch` for the desired number of epochs and returns the losses per epoch.
-# `plot_losses_live`: Plots losses during training and live-updates every few epochs.
+# `train_epochs`: Calls `train_epoch` for the desired number of mini-epochs and returns the losses per mini-epoch.
+# `plot_losses_live`: Plots losses during training and live-updates every few mini-epochs.
 # %%
 from tqdm.auto import tqdm
 from itertools import islice
@@ -609,13 +627,17 @@ from IPython.display import clear_output
 import matplotlib.pyplot as plt
 
 
-def train_epoch(model, loader, optimizer, loss, beta):
+def train_epoch(model, loader, optimizer, loss, beta, steps_per_epoch=None):
+    """Run one mini-epoch over (at most) steps_per_epoch batches of `loader`."""
     model.train()
     running_rec_loss = 0.0
     running_kl_loss = 0.0
     running_loss = 0.0
 
-    for x, _ in loader:
+    batch_iter = loader if steps_per_epoch is None else islice(loader, steps_per_epoch)
+    n_batches = 0
+
+    for x, _ in batch_iter:
         x = x.to(device)
         xx, _, mu, logvar = model(x)
         rec_l = rec_loss(xx, x)
@@ -630,10 +652,11 @@ def train_epoch(model, loader, optimizer, loss, beta):
         running_rec_loss += rec_l.item()
         running_kl_loss += kl_l.item()
         running_loss += l.item()
+        n_batches += 1
 
-    avg_rec_loss = running_rec_loss / len(loader)
-    avg_kl_loss = running_kl_loss / len(loader)
-    avg_loss = running_loss / len(loader)
+    avg_rec_loss = running_rec_loss / n_batches
+    avg_kl_loss = running_kl_loss / n_batches
+    avg_loss = running_loss / n_batches
 
     return avg_rec_loss, avg_kl_loss, avg_loss
 
@@ -649,23 +672,28 @@ def plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses):
     ):
         ax.plot(values, c = "k")
         ax.set_title(f"{title}: {values[-1]:.4f}")
-        ax.set_xlabel("Epoch")
+        ax.set_xlabel("Mini-epoch")
         ax.grid(True, linestyle="--", alpha=0.6)
 
     plt.tight_layout()
     plt.show()
 
 
-def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
+def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10, steps_per_epoch=100):
+    """
+    Train `model` for `n` mini-epochs.
+
+    A mini-epoch processes `steps_per_epoch` mini-batches (≈ steps_per_epoch * batch_size
+    images) rather than a full pass over the dataset. This keeps the exercise responsive
+    on CPU; set `steps_per_epoch=None` to use full epochs.
+    """
     epoch_rec_losses = []
     epoch_kl_losses = []
     epoch_losses = []
 
     for epoch in range(n):
-        fresh_loader_iter = iter(loader)
-        sliced_loader = tqdm(islice(fresh_loader_iter, 100), total=100, disable=True)
         avg_rec_loss, avg_kl_loss, avg_loss = train_epoch(
-            model, sliced_loader, optimizer, loss, beta=beta
+            model, loader, optimizer, loss, beta=beta, steps_per_epoch=steps_per_epoch
         )
         epoch_rec_losses.append(avg_rec_loss)
         epoch_kl_losses.append(avg_kl_loss)
@@ -673,22 +701,22 @@ def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
 
         if (epoch + 1) % plot_every == 0:
             clear_output(wait=True)
-            print(f"Epoch {epoch+1}/{n} | loss={avg_loss:.4f} | rec={avg_rec_loss:.4f} | kl={avg_kl_loss:.4f}")
+            print(f"Mini-epoch {epoch+1}/{n} | loss={avg_loss:.4f} | rec={avg_rec_loss:.4f} | kl={avg_kl_loss:.4f}")
             plot_losses_live(epoch_losses, epoch_rec_losses, epoch_kl_losses)
 
     return {"loss": epoch_losses, "rec": epoch_rec_losses, "kl": epoch_kl_losses}
 
 
 # %% [markdown]
-# ### Part A.2.4: Train a model for 100 epochs
+# ### Part A.2.4: Train a model for 100 mini-epochs
 
 # %% [markdown]
 # We can now train `model`.
 # In this part, we want to understand the model rather than analyze its results.
-# Therefore, we sacrifice quality for time by only training 100 epochs.
+# Therefore, we sacrifice quality for time by only training 100 mini-epochs.
 
 # %%
-epochs = 100
+epochs = 100  # mini-epochs (see train_epochs docstring above)
 train_epochs(epochs, model, train_loader, optimizer, loss, beta = 1);
 
 # %% [markdown]
@@ -863,10 +891,10 @@ view_test_sample(model, test_loader)
 # </div>
 
 # %% [markdown]
-# ### Part A.2.6: Train two models for 1000 epochs
+# ### Part A.2.6: Train two models for 1000 mini-epochs
 
 # %% [markdown]
-# #### A.2.6.1: Train a model without regularized latent sapce
+# #### A.2.6.1: Train a model without regularized latent space
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
@@ -876,7 +904,7 @@ view_test_sample(model, test_loader)
 # * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space.
 # * Instantiate a new optimizer
 # * Pass `beta = 0`
-# * Train your new model for `epochs = 1000`
+# * Train your new model for `epochs = 1000` mini-epochs (see note in A.2.3.3)
 #
 #
 #
@@ -926,26 +954,26 @@ view_test_sample(model0, test_loader)
 # </div>
 
 # %% [markdown]
-# #### A.2.6.2: Train a model with regularized latent sapce
+# #### A.2.6.2: Train a model with regularized latent space
 # We are now training another model called `model1`
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
 #
-# Change one variable in the code below to train a new model with better-behaved KL loss.
-# In this case, the KL loss doesn't have to decrease – we just want it to increase less.
+# Fill in a value of <code>beta</code> below to train a new model with a better-behaved KL loss.
+# In this case, the KL loss doesn't have to decrease – we just want it to grow more slowly (or stabilise).
 #
 # Tips:
-# * Have a look at the overall loss function definitions
-# * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 1000, to decide on a value
-# * You can train for fewer epochs if you want to try multiple values. Train for 1000 epochs once you decided
+# * Have a look at the overall loss function definition (<code>loss(rec, kl, beta) = rec + beta * kl</code>).
+# * Look at the order of magnitude of the reconstruction loss and KL loss (e.g. at mini-epoch 1000 of <code>model0</code>) to decide on a value.
+# * You can train for fewer mini-epochs while experimenting; train for 1000 once you've decided.
 # </div>
 
 # %% tags=["task"]
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-beta = 0
+beta = ...  # TODO: choose a value of beta that regularizes the latent space
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
 
@@ -1427,7 +1455,8 @@ def gen_mean_numbers(model, mu_mean, title):
     fig, ax = plt.subplots(1, 10, figsize = (20, 4))
     with torch.no_grad():
         for i in range(10):
-            gen = model.decode(mu_mean[i].to(device))
+            # unsqueeze(0) adds a batch dim of 1 so the MLP sees a (1, latent_dim) input
+            gen = model.decode(mu_mean[i].unsqueeze(0).to(device))
 
             ax[i].imshow(gen.detach().cpu().squeeze().numpy(), cmap = "Grays")
             ax[i].set_title(f"Mean for {i}")
@@ -1435,8 +1464,8 @@ def gen_mean_numbers(model, mu_mean, title):
     plt.tight_layout()
 
 
-# gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
-gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
+gen_mean_numbers(model0, mu_mean0, title="Model 0 — β=0")  # compare: unregularized
+gen_mean_numbers(model1, mu_mean1, title="Model 1 — β>0")  # vs regularized
 
 # %% [markdown]
 # #### Interpolate between digits in the latent space
@@ -1497,11 +1526,11 @@ def interpolate(digit_a, digit_b, mu_mean, model, title, steps = 10):
         for i, weight_b in enumerate(np.linspace(0, 1, steps)):
             weight_a = 1 - weight_b
             trajectory = weight_a * mu_a + weight_b * mu_b
-            trajectory = trajectory.to(device)
+            trajectory = trajectory.unsqueeze(0).to(device)  # add batch dim
             gen = model.decode(trajectory)
 
             ax[i].imshow(gen.detach().cpu().squeeze().numpy(), cmap = "Grays")
-            ax[i].set_title(f"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
+            ax[i].set_title(rf"{weight_a:.1f} x $\mu_{digit_a}$, {weight_b:.1f} x $\mu_{digit_b}$")
     plt.suptitle(title)
     plt.tight_layout()
 
