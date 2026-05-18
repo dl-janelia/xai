@@ -1,9 +1,17 @@
-# Exercise 8: Explainable AI and Knowledge Extraction
+# Exercise 7: Representation learning, Explainable AI and Knowledge Extraction
 
 ## Overview
-The goal of this exercise is to learn how to probe what a pre-trained classifier has learned about the data it was trained on. 
+This two-part exercise will first guide you through the fundamentals and evaluation of representation learning, and then shift focus to decoding how pre-trained models make decisions using Explainable AI (XAI).
 
-We will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course. 
+The aim of part A is to explore unsupervised representation learning by building and training a Variational Autoencoder (VAE). We will be working with the classic MNIST dataset. Unlike supervised learning, our model won't be given any true labels to start with; instead, it must learn to compress the images into a compact "latent space" and reconstruct them, discovering the dataset's structure on its own.
+
+We will construct the VAE architecture from scratch and experiment with different training parameters. Specifically, we will pay attention at how the balance between reconstruction loss and latent space regularization shapes the smoothness and continuity of the representations we learn.
+
+Then, we will evaluate the quality of these representations. By applying a simple logistic regression classifier to the low-dimensional latent coordinates, we can quantify just how cleanly our unsupervised model has separated the different digit classes without ever explicitly being taught what those digits are!
+
+Lastly, we will explore the generative properties of our trained VAE. We will sample new points and interpolate paths between digit clusters to generate completely new images. We'll conclude by scaling up the latent space to capture richer features, using UMAP to visualize the high-dimensional manifolds our model has successfully untangled.
+
+The goal of part B is to learn how to probe what a pre-trained classifier has learned about the data it was trained on. We will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course. 
 Unlike regular MNIST, our dataset is classified not by number, but by color! The question is... which colors fall within which class?
 
 ![CMNIST](assets/cmnist.png)
@@ -42,6 +50,7 @@ Feel free to have a look at the `setup.sh` script to see the details.
 Next, open the exercise notebook!
 
 ### Acknowledgments
-
-This notebook was written by Diane Adjavon, with input from Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Anna Foix, and Ben Salmon. 
-It was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
+This notebook was written by Diane Adjavon, Maria Theiss and Anna Foix-Romero with input from
+Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Ben Salmon, Albert Dominguez, Talley Lambert and Eva de la Serna.
+Part B was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
+Part A has been inspired by multiple discussions between Virginie Uhlhmann, Alex Krull, Martin Weigert, Albert Dominguez, Ed Hirata and Anna Foix-Romero.
