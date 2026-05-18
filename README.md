@@ -5,11 +5,7 @@ This two-part exercise will first guide you through the fundamentals and evaluat
 
 The aim of part A is to explore unsupervised representation learning by building and training a Variational Autoencoder (VAE). We will be working with the classic MNIST dataset. Unlike supervised learning, our model won't be given any true labels to start with; instead, it must learn to compress the images into a compact "latent space" and reconstruct them, discovering the dataset's structure on its own.
 
-We will construct the VAE architecture from scratch and experiment with different training parameters. Specifically, we will pay attention at how the balance between reconstruction loss and latent space regularization shapes the smoothness and continuity of the representations we learn.
-
-Then, we will evaluate the quality of these representations. By applying a simple logistic regression classifier to the low-dimensional latent coordinates, we can quantify just how cleanly our unsupervised model has separated the different digit classes without ever explicitly being taught what those digits are!
-
-Lastly, we will explore the generative properties of our trained VAE. We will sample new points and interpolate paths between digit clusters to generate completely new images. We'll conclude by scaling up the latent space to capture richer features, using UMAP to visualize the high-dimensional manifolds our model has successfully untangled.
+In this exercise, we will construct a VAE from scratch and see how the balance between reconstruction loss and regularization shapes smooth, continuous representations. We will then evaluate this latent space using a simple logistic regression classifier to quantify how cleanly the model separates digit classes—without ever being given their labels! Finally, we will explore the VAE's generative power by interpolating between clusters to create completely new images, concluding with UMAP to visualize the high-dimensional manifolds our model has successfully untangled.
 
 The goal of part B is to learn how to probe what a pre-trained classifier has learned about the data it was trained on. We will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course. 
 Unlike regular MNIST, our dataset is classified not by number, but by color! The question is... which colors fall within which class?
