@@ -275,6 +275,10 @@ class MLP(nn.Module):
 # * However, sampling `z` directly from `mu` and $std$(`logvar`) does not allow for backpropagation (random sampling is not differentiable)
 # * To allow for backpropagation, we isolate the non-differentiable random sampling node and sample $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
 # * We then use this $\epsilon$ to produce `z`: `z` $=$ `mu` $+ \epsilon * e^{logvar/2}$ (here, gradient can flow through `mu` and `logvar`)
+# 
+# ![Reparameterization trick](./assets/Reparameterization_Trick.png)
+# Source: [Wikipedia](https://en.wikipedia.org/wiki/Reparameterization_trick#).
+#
 #
 # **The decode function**:
 # * Takes in a latent vector `z` and uses an MLP to reconstruct the original sample, reshaping as appropriate.
@@ -509,8 +513,15 @@ test_vae()
 # The reconstruction loss
 rec_loss = nn.BCELoss(reduction="sum")
 
+# %% [markdown]
+#
 
 # The KL loss
+# %% tags=["task"]
+def kl_loss(mu, logvar):
+    return ...
+    
+# %% tags=["solution"]
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1))
@@ -689,7 +700,7 @@ def train_epochs(n, model, loader, optimizer, loss, beta, plot_every=10):
 
 # %%
 epochs = 100
-train_epochs(epochs, model, train_loader, optimizer, loss, beta = 1);
+train_epochs(epochs, model, train_loader, optimizer, loss, beta = 1)
 
 # %% [markdown]
 # ### Part A.2.5: Inspect the trained model
@@ -789,7 +800,7 @@ im1 = ax[2].imshow(rec_2, cmap= "Grays")
 ax[2].set_title("rec 2")
 plt.colorbar(im1, shrink = 0.2)
 
-im2 = ax[3].imshow(rec_1 - rec_2, cmap= "Grays")
+im2 = ax[3].imshow(rec_1 - rec_2, cmap= "RdBu")
 ax[3].set_title("rec 1 - rec 2")
 plt.colorbar(im2, shrink = 0.2)
 
@@ -870,6 +881,8 @@ view_test_sample(model, test_loader)
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
+# We will now train two models, `model0` without regularization and `model1` with regularization.
+# To acheive this, we set the `beta` parameter for the loss used with `model0` to `0`.
 #
 # Let's train our first "serious" model.
 # * Instantiate a new variational autoencoder model and name it `model0`
@@ -945,10 +958,8 @@ view_test_sample(model0, test_loader)
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
 epochs = 1000
-beta = 0
+beta = # TODO
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
-
-
 
 
 # %% tags=["solution"]
@@ -1089,12 +1100,8 @@ def scatter_digits(ax, mus, lbls, mu_mean=None, alpha=1, CMAP = "tab10"):
 
     if mu_mean is not None:
         for d in range(10):
-            ax.scatter(*mu_mean[d], s=220, color="white", edgecolors="white", linewidths=3, marker="X", zorder=9)
-            ax.scatter(*mu_mean[d], s=80,  color=CMAP(d), edgecolors="black", linewidths=0.5, marker="X", zorder=10)
-            ax.annotate(str(d), xy=mu_mean[d], fontsize=8, fontweight="bold",
-                        ha="center", va="bottom", xytext=(0, 5),
-                        textcoords="offset points", zorder=11,
-                        bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.8))
+            ax.scatter(*mu_mean[d], s=100, color="white", edgecolors="white", linewidths=0.4, marker="X", zorder=9)
+            ax.scatter(*mu_mean[d], s=70,  color=CMAP(d), edgecolors="black", linewidths=0.5, marker="X", zorder=10)
 
     ax.legend(title="Digit", markerscale=6, ncol=2, fontsize=7, loc="best")
     ax.set_aspect("equal")
@@ -1110,14 +1117,14 @@ def scatter_with_normal(ax, mus, lbls, rnd_normal, mean, std):
     ax.set_aspect("equal")
 
 
-def plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1):
+def plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1, alpha=1, CMAP = "tab10"):
     """Latent space coloured by digit, with per-class centroids."""
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     for ax, mus, lbls, mu_mean, title in [
         (axes[0], mus_model0, lbls0, mu_mean0, "model0: β=0 latent space"),
         (axes[1], mus_model1, lbls1, mu_mean1, "model1: β>0 latent space"),
     ]:
-        scatter_digits(ax, mus, lbls, mu_mean=mu_mean)
+        scatter_digits(ax, mus, lbls, mu_mean=mu_mean, alpha=alpha, CMAP=CMAP)
         ax.set_title(title, fontsize=11)
         ax.set_xlabel("mu₁"); ax.set_ylabel("mu₂")
     fig.suptitle("Latent space — coloured by digit", fontsize=13)
@@ -1203,7 +1210,7 @@ plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=np.random
 #
 # Below we will sample 100 values `z` from `mu` and `logvar`.
 #
-# So each of the 10000 test-image is represented by 100 points – 100000 points in total.
+# So each of the 10000 test-image is represented by 100 points – 1000000 points in total.
 
 # %%
 def sample_from_latents(mus, logvars, n_samples=100):
@@ -1340,7 +1347,7 @@ def plot_decision_boundaries(ax, clf, mus, lbls, title, resolution=500, CMAP="ta
 
     # Draw crisp decision boundaries
     ax.contour(xx, yy, grid_preds, levels=np.arange(-0.5, 10, 1),
-               colors="k", linewidths=0.4, zorder=1)
+               colors="k", linewidths=0.4, zorder=10)
 
     # Overlay data points
     scatter_digits(ax, mus, lbls)
@@ -1443,6 +1450,11 @@ gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 # Above, we have seen "mean" representations for each digit, corresponding to centroids of each digit class in the latent space.
 # We can decode points sampled along the straight line between two centroids in latent space. A visualization will be plotted below.
 #
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Questions</h3>
+# Can we interpolate and reconstruct the same way with different architectures? (AE, ResNet, UNet, etc...)
+# </div>
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
@@ -1656,28 +1668,11 @@ def run_umap(latents, n_components=2, random_state=42, n_neighbors=15, min_dist=
     return mu_2d
 
 
-def plot_umap(mu_2d, labels,
-              cmap='tab10', alpha=0.6, s=10, centers=None, center_labels=None):
-
-    ticks = np.unique(labels)
-    base_cmap = plt.get_cmap(cmap)
-    colors_n = base_cmap(np.linspace(0, 1, np.max(ticks) + 1))
-    new_cmap = ListedColormap(colors_n)
-
-    plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=labels, cmap=new_cmap, alpha=alpha, s=s)
-    plt.colorbar(scatter, ticks=ticks)
-
-    if centers is not None:
-        for i, label in enumerate(center_labels):
-            plt.text(centers[i, 0], centers[i, 1], s=str(label), backgroundcolor="white", size='large')
-        plt.scatter(centers[:, 0], centers[:, 1], s=50, marker="X", c="k", zorder=10000)
-    plt.axis('off')
-
 
 # %%
 mu_2d_2, mu_means_2d_2 = run_umap(mus2, means = mu_mean2)
-plot_umap(mu_2d_2, lbls2, cmap = "tab10", centers = mu_means_2d_2, center_labels=range(10))
+_, ax = plt.subplots(1, 1, figsize=(10, 8))
+scatter_digits(ax, mu_2d_2, lbls2, mu_means_2d_2, alpha=0.6)
 
 # %% [markdown]
 # Clusters look well-separated, but we should verify with logistic regression.
