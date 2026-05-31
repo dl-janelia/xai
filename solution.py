@@ -227,7 +227,7 @@ print(f"dataloader element shape: {smpl.shape} (class: {lbl})")
 # ## Part A.2: Variational Autoencoders (VAE)
 # A Variational Autoencoder (VAE) is a machine learning architecture capable of learning a compressed representation of data by pushing it through a low-dimensional "bottleneck" and then expanding it back into its original size.
 # The model is forced to rebuild with limited information, and must therefore learn to capture only the most important features, performing non-linear dimensionality reduction.
-# <p align="center"><img src="assets/vae.svg" width="50%"></p>
+# <p align="center"><img src="assets/vae.png" width="100%"></p>
 # In our case, we convert `28 * 28 = 784` pixel images into a **few** core features via the encoder part of the model. The decoder part then turns these few features back into `28 * 28` pixel images.
 #
 # ### Part A.2.1: The architecture of our VAE
@@ -1650,7 +1650,6 @@ print(mu_mean2.shape) # N digits, latent dims
 
 # %%
 from umap import UMAP
-from matplotlib.colors import ListedColormap
 
 def run_umap(latents, n_components=2, random_state=42, n_neighbors=15, min_dist=0.1, means=None):
     reducer = UMAP(n_components=n_components, random_state=random_state,
