@@ -509,9 +509,14 @@ test_vae()
 # #### Latent space regularization
 # **Kullback-Leibler divergence** loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
 # KL-loss penalizes the latent space distribution for being different from a standard normal.
+
 # %%
 # The reconstruction loss
-rec_loss = nn.BCELoss(reduction="sum")
+_bce_per_pixel = nn.BCELoss(reduction="none")
+def rec_loss(xx, x):
+    # sum over pixel dims, mean over batch — matches the kl_loss reduction
+    per_image = _bce_per_pixel(xx, x).flatten(start_dim=1).sum(dim=1)
+    return per_image.mean()
 
 # %% [markdown]
 #
