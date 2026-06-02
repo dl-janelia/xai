@@ -505,10 +505,11 @@ test_vae()
 # The **Binary Cross Entropy** reconstruction loss (**BCE loss**) is appropriate here, as we scale input images to gray values of [0, 1].
 # The decoder's final activation is a Sigmoid function, mapping to the same scale of [0, 1].
 #
-#
 # #### Latent space regularization
-# **Kullback-Leibler divergence** loss (**KL loss**) measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
-# KL-loss penalizes the latent space distribution for being different from a standard normal.
+# The **Kullback-Leibler divergence** loss (**KL loss**)
+# $$D_{KL}=\frac{1}{2}\sum_{j=1}^{J}(\sigma_{j}^{2}+\mu_{j}^{2}-1-log(\sigma_{j}^{2}))$$
+# measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
+# The KL-loss penalizes the latent space distribution for being different from a standard normal.
 
 # %%
 # The reconstruction loss
