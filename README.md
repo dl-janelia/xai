@@ -35,7 +35,7 @@ This is a GPU-hungry exercise so you're going to need all the GPU memory you can
 Next, run the setup script. It might take a few minutes.
 ```
 cd 07_xai
-bash setup.sh
+source setup.sh
 ```
 This will:
 - Create a `conda` environment for this exercise
