@@ -9,7 +9,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.2
+#       jupytext_version: 1.11.2
 #   kernelspec:
 #     display_name: 07_xai
 #     language: python
@@ -275,7 +275,7 @@ class MLP(nn.Module):
 # * However, sampling `z` directly from `mu` and $std$(`logvar`) does not allow for backpropagation (random sampling is not differentiable)
 # * To allow for backpropagation, we isolate the non-differentiable random sampling node and sample $\epsilon$ from a Normal distritubion with mean 0 and standard deviation 1
 # * We then use this $\epsilon$ to produce `z`: `z` $=$ `mu` $+ \epsilon * e^{logvar/2}$ (here, gradient can flow through `mu` and `logvar`)
-# 
+#
 # ![Reparameterization trick](./assets/Reparameterization_Trick.png)
 # Source: [Wikipedia](https://en.wikipedia.org/wiki/Reparameterization_trick#).
 #
@@ -285,21 +285,21 @@ class MLP(nn.Module):
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task – Fill in the gaps</h2>
 #
-# There are gaps marked as `...`.
+# There are gaps marked as `...`   
 # Fill them in:
 #
 # **Missing in `def __init__`**
 #
-# The encoder and decoder instance of the MLP are missing. Replace `...` with:
-# `self.encoder`
-# `self.decoder`.
+# The encoder and decoder instance of the MLP are missing. Replace `...` with:  
+# `self.encoder`  
+# `self.decoder`   
 #
-# How can you tell which is which?
+# How can you tell which is which?  
 #
 #
 # **Missing in `def reparameterize`**
 #
-# `epsilon` (missing twice)
+# `epsilon` (missing twice)  
 # `std`
 #
 # Tip:
@@ -307,14 +307,14 @@ class MLP(nn.Module):
 # $z = mu + \epsilon * std$
 #
 #
-# **Missing in `def forward`**
-# `mu`
-# `logvar`
-# `z`
-# `self.decode`
-# `self.encode`
-# `self.reparameterize`
-# `xx` (this is the reconstructed image)
+# **Missing in `def forward`**  
+# `mu`  
+# `logvar`  
+# `z`  
+# `self.decode`  
+# `self.encode`  
+# `self.reparameterize`  
+# `xx` (this is the reconstructed image)  
 #
 # </div>
 #
@@ -521,12 +521,12 @@ def rec_loss(xx, x):
 
 # %% [markdown]
 #
-
+#
 # The KL loss
 # %% tags=["task"]
 def kl_loss(mu, logvar):
     return ...
-    
+
 # %% tags=["solution"]
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
@@ -574,10 +574,11 @@ def loss(rec, kl, beta):
 # Now we get to create and train our model on the MNIST dataset.
 #
 # #### A.2.3.1 Set the device
-# As our model and dataset is small, CPUs are likely to outperform GPUs.
-# The overhead of transferring the data to GPU might make the model slower than running it on CPU.
+# As our model and dataset is small, on many machines, CPUs are likely to outperform GPUs:  
+# The overhead of transferring the data to GPU might make the model slower than running it on CPU.  
+# However, on our virtual machines, running it on GPU is faster:  
 # %%
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # %% [markdown]
 # #### Part A.2.3.2: Model instance and optimizer
@@ -880,7 +881,7 @@ view_test_sample(model, test_loader)
 # </div>
 
 # %% [markdown]
-# ### Part A.2.6: Train two models for 1000 epochs
+# ### Part A.2.6: Train two models for 500 epochs
 
 # %% [markdown]
 # #### A.2.6.1: Train a model without regularized latent sapce
@@ -895,7 +896,7 @@ view_test_sample(model, test_loader)
 # * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space.
 # * Instantiate a new optimizer
 # * Pass `beta = 0`
-# * Train your new model for `epochs = 1000`
+# * Train your new model for `epochs = 500`
 #
 #
 #
@@ -915,7 +916,7 @@ losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = bet
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 
-epochs = 1000
+epochs = 500
 beta = 0
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
@@ -956,14 +957,14 @@ view_test_sample(model0, test_loader)
 #
 # Tips:
 # * Have a look at the overall loss function definitions
-# * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 1000, to decide on a value
-# * You can train for fewer epochs if you want to try multiple values. Train for 1000 epochs once you decided
+# * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 500, to decide on a value
+# * You can train for fewer epochs if you want to try multiple values. Train for 500 epochs once you decided
 # </div>
 
 # %% tags=["task"]
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 1000
+epochs = 500
 beta = # TODO
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
@@ -972,7 +973,7 @@ losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = bet
 # beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 1000
+epochs = 500
 beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
@@ -1593,7 +1594,7 @@ decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, 
 # * Instantiate a new variational autoencoder model and name it `model2`
 # * Instantiate a new optimizer
 # * Pass `beta = 1`
-# * Train your new model for `epochs = 1000`
+# * Train your new model for `epochs = 500`
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
@@ -1609,7 +1610,7 @@ latent_dim = ...
 model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
 optimizer = Adam(model2.parameters(), lr = 0.0001)
 
-epochs = 1000
+epochs = 500
 beta = 1
 
 train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
@@ -1620,7 +1621,7 @@ latent_dim = 99
 model2 = VariationalAutoEncoder(w, h, latent_dim = latent_dim).to(device)
 optimizer = Adam(model2.parameters(), lr = 0.0001)
 
-epochs = 1000
+epochs = 500
 beta = 1
 
 train_epochs(epochs, model2, train_loader, optimizer, loss, beta = beta);
