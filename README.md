@@ -23,7 +23,7 @@ Finally, we will combine the two methods — attribution and counterfactual — 
 
 ## Setup
 
-Before anything else, in [the super-repository](https://github.com/ai-mbl/AI-MBL-2025) called `AI-MBL-2025`:
+Before anything else, in [the super-repository](https://github.com/dl-janelia/DL-Janelia-2026) called `DL-MBL-2026`:
 ```
 git pull
 git submodule update --init 07_xai
