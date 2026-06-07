@@ -523,6 +523,14 @@ def rec_loss(xx, x):
 #
 #
 # The KL loss
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h2>Task – KL loss </h2>
+# Tip: Implement the formula as above. Sum over the latent dimension.  <br>
+# Then compute the mean over the batch dimension to match the reconstruction loss. 
+# </div>
+
+
 # %% tags=["task"]
 def kl_loss(mu, logvar):
     return ...
