@@ -32,7 +32,7 @@
 # the quality of the obtained representations.  The second half of the exercise shifts focus to Explainable AI (XAI),
 # where the goal is to learn how to probe what a pre-trained classifier has learned about the data it was trained on.
 #
-# In part A, we will be building models for representation learning
+# **In part A** we will be building models for representation learning
 #
 # We will:
 # 1. Build and train a variational autoencoder (VAE)
@@ -40,7 +40,7 @@
 # 3. Evaluate representation quality
 # 4. Explore the generative properties of VAEs.
 #
-# In part B, we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
+# **In part B**, we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
 # Unlike regular MNIST, our dataset is classified not by number, but by color!
 #
 # We will:
