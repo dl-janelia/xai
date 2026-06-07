@@ -40,7 +40,7 @@
 # 3. Evaluate representation quality
 # 4. Explore the generative properties of VAEs.
 #
-# **In part B**, we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
+# **In part B** we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
 # Unlike regular MNIST, our dataset is classified not by number, but by color!
 #
 # We will:
