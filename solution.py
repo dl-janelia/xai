@@ -1447,7 +1447,7 @@ plt.show()
 # In a latent-space with well-separated clusters, each centroid should look like a clean version of the digit.
 
 # %%
-# Uncomment and run if you want to see the latent-space again:
+# Run if you want to see the latent-space again:
 plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
 
 
