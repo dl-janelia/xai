@@ -975,7 +975,7 @@ view_test_sample(model0, test_loader)
 # Tips:
 # * Have a look at the overall loss function definitions
 # * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 500, to decide on a value
-# * You can train for fewer epochs if you want to try multiple values. Train for 500 epochs once you decided
+# * You can train for fewer epochs if you want to try multiple values. Train for `n_epochs` epochs once you decided.  
 # </div>
 
 # %% tags=["task"]
