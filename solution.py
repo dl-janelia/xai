@@ -772,9 +772,9 @@ print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
 
 # %% [markdown]
 # #### Sample
-# Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$
-# The `reparametrize` function allows for this sampling without blocking backpropagation.
-# Note how `z` is different for each draw. Here, we draw twice and call the result `z_1` and `z_2`.
+# Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$  
+# The `reparametrize` function allows for this sampling without blocking backpropagation.  
+# Note how `z` is different for each draw. Here, we draw twice and call the result `z_1` and `z_2`.  
 
 # %%
 with torch.no_grad():
@@ -892,24 +892,32 @@ view_test_sample(model, test_loader)
 # ### Part A.2.6: Train two models for 500 epochs
 
 # %% [markdown]
-# #### A.2.6.1: Train a model without regularized latent sapce
+# #### A.2.6.1: Train a model without regularized latent space
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
 # We will now train two models, `model0` without regularization and `model1` with regularization.
-# To acheive this, we set the `beta` parameter for the loss used with `model0` to `0`.
+# To achieve this, we set the `beta` parameter for the loss used with `model0` to `0`.
 #
 # Let's train our first "serious" model.
 # * Instantiate a new variational autoencoder model and name it `model0`
 # * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space.
 # * Instantiate a new optimizer
 # * Pass `beta = 0`
-# * Train your new model for `epochs = 500`
-#
-#
 #
 # </div>
 #
+
+# %% [markdown]
+# <div class="alert alert-info">
+# <b> Note: </b> We set epochs to 500, which should take about 3 - 4 min per model.  
+# We train <b>two</b> models with this value, so 6 - 8 min in total.  
+# You can increase this value to 750 or 1000 if you have the time and want to improve training.   
+# </div>
+
+# %%
+# Increase if you have the time
+n_epochs = 500
 
 # %% tags=["task"]
 
@@ -917,6 +925,7 @@ model0 = VariationalAutoEncoder(...).to(device)  # TODO
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 ...
 ...
+epochs = n_epochs
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
 # %% tags=["solution"]
@@ -924,7 +933,7 @@ losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = bet
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 
-epochs = 500
+epochs = n_epochs
 beta = 0
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
@@ -972,7 +981,7 @@ view_test_sample(model0, test_loader)
 # %% tags=["task"]
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 500
+epochs = n_epochs
 beta = # TODO
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
@@ -981,7 +990,7 @@ losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = bet
 # beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 500
+epochs = n_epochs
 beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
