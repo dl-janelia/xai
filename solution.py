@@ -563,7 +563,7 @@ def loss(rec, kl, beta):
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 1</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -874,7 +874,7 @@ view_test_sample(model, test_loader)
 # Not great, not terrible... After the checkpoint, we will instantiate new models and train them for longer.
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -951,7 +951,7 @@ view_test_sample(model0, test_loader)
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1038,7 +1038,7 @@ plot_losses_compare(
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 4</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1213,7 +1213,7 @@ plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=np.random
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 5</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1285,12 +1285,13 @@ plt.show()
 # <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
 # <li>Which latent space looks more continuous? </li>
+# <li>Why does it appear like there are fewer data points for beta = 0? </li>
 # <li>Why is it important that the latent space follows a known distribution?</li>
 # </ul>
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 6</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1422,7 +1423,7 @@ plt.show()
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 7</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1466,7 +1467,7 @@ def gen_mean_numbers(model, mu_mean, title):
     plt.tight_layout()
 
 
-# gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
+gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
 gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 
 # %% [markdown]
@@ -1588,7 +1589,7 @@ def decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbl
 decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 8</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1714,7 +1715,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 9</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
