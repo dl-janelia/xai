@@ -32,7 +32,7 @@
 # the quality of the obtained representations.  The second half of the exercise shifts focus to Explainable AI (XAI),
 # where the goal is to learn how to probe what a pre-trained classifier has learned about the data it was trained on.
 #
-# In part A, we will be building models for representation learning
+# **In part A** we will be building models for representation learning
 #
 # We will:
 # 1. Build and train a variational autoencoder (VAE)
@@ -40,7 +40,7 @@
 # 3. Evaluate representation quality
 # 4. Explore the generative properties of VAEs.
 #
-# In part B, we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
+# **In part B** we will be working with a simple example which is a fun derivation on the MNIST dataset that you will have seen in previous exercises in this course.
 # Unlike regular MNIST, our dataset is classified not by number, but by color!
 #
 # We will:
@@ -511,6 +511,12 @@ test_vae()
 # measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
 # The KL-loss penalizes the latent space distribution for being different from a standard normal.
 
+# %% [markdown]
+#
+#
+# The reconstruction loss
+
+
 # %%
 # The reconstruction loss
 _bce_per_pixel = nn.BCELoss(reduction="none")
@@ -523,11 +529,10 @@ def rec_loss(xx, x):
 #
 #
 # The KL loss
-# %% tags=["task"]
-def kl_loss(mu, logvar):
-    return ...
 
-# %% tags=["solution"]
+
+# %% 
+# The KL loss 
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1))
@@ -555,7 +560,7 @@ def loss(rec, kl, beta):
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 1</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -764,9 +769,9 @@ print(f"mu + logvar: {mu.nbytes + logvar.nbytes} bytes")
 
 # %% [markdown]
 # #### Sample
-# Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$
-# The `reparametrize` function allows for this sampling without blocking backpropagation.
-# Note how `z` is different for each draw. Here, we draw twice and call the result `z_1` and `z_2`.
+# Values `z` are sampled from a Normal distribution with mean `mu` and standard deviation $\sigma = e^{\,\text{logvar}/2}$  
+# The `reparametrize` function allows for this sampling without blocking backpropagation.  
+# Note how `z` is different for each draw. Here, we draw twice and call the result `z_1` and `z_2`.  
 
 # %%
 with torch.no_grad():
@@ -866,7 +871,7 @@ view_test_sample(model, test_loader)
 # Not great, not terrible... After the checkpoint, we will instantiate new models and train them for longer.
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -884,24 +889,32 @@ view_test_sample(model, test_loader)
 # ### Part A.2.6: Train two models for 500 epochs
 
 # %% [markdown]
-# #### A.2.6.1: Train a model without regularized latent sapce
+# #### A.2.6.1: Train a model without regularized latent space
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h2>Task</h2>
 # We will now train two models, `model0` without regularization and `model1` with regularization.
-# To acheive this, we set the `beta` parameter for the loss used with `model0` to `0`.
+# To achieve this, we set the `beta` parameter for the loss used with `model0` to `0`.
 #
 # Let's train our first "serious" model.
 # * Instantiate a new variational autoencoder model and name it `model0`
 # * Keep `latent_dim = 2`. This is not ideal, but helps us better understand the latent space.
 # * Instantiate a new optimizer
 # * Pass `beta = 0`
-# * Train your new model for `epochs = 500`
-#
-#
 #
 # </div>
 #
+
+# %% [markdown]
+# <div class="alert alert-info">
+# <b> Note: </b> We set epochs to 500, which should take about 3 - 4 min per model.  
+# We train <b>two</b> models with this value, so 6 - 8 min in total.  
+# You can increase this value to 750 or 1000 if you have the time and want to improve training.   
+# </div>
+
+# %%
+# Increase if you have the time
+n_epochs = 500
 
 # %% tags=["task"]
 
@@ -909,6 +922,7 @@ model0 = VariationalAutoEncoder(...).to(device)  # TODO
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 ...
 ...
+epochs = n_epochs
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
 # %% tags=["solution"]
@@ -916,7 +930,7 @@ losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = bet
 model0 = VariationalAutoEncoder(w, h, latent_dim = 2).to(device)  # fresh weights
 optimizer = Adam(model0.parameters(), lr=0.0001)         # fresh optimizer
 
-epochs = 500
+epochs = n_epochs
 beta = 0
 losses0 = train_epochs(epochs, model0, train_loader, optimizer, loss, beta = beta)
 
@@ -934,7 +948,7 @@ view_test_sample(model0, test_loader)
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -958,13 +972,13 @@ view_test_sample(model0, test_loader)
 # Tips:
 # * Have a look at the overall loss function definitions
 # * Look at the order of magnitude of the reconstruction loss and KL loss, for instance at epoch 500, to decide on a value
-# * You can train for fewer epochs if you want to try multiple values. Train for 500 epochs once you decided
+# * You can train for fewer epochs if you want to try multiple values. Train for `n_epochs` epochs once you decided.  
 # </div>
 
 # %% tags=["task"]
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 500
+epochs = n_epochs
 beta = # TODO
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
@@ -973,7 +987,7 @@ losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = bet
 # beta 1
 model1 = VariationalAutoEncoder(w, h, latent_dim=2).to(device)
 optimizer = Adam(model1.parameters(), lr=0.0001)         # fresh optimizer
-epochs = 500
+epochs = n_epochs
 beta = 1
 losses1 = train_epochs(epochs, model1, train_loader, optimizer, loss, beta = beta)
 
@@ -1021,7 +1035,7 @@ plot_losses_compare(
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 4</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1196,7 +1210,7 @@ plot_latent_vs_normal(mus_model0, lbls0, mus_model1, lbls1, rnd_normal=np.random
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 5</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1268,12 +1282,13 @@ plt.show()
 # <div class="alert alert-block alert-warning"><h4> Questions </h4>
 # <ul>
 # <li>Which latent space looks more continuous? </li>
+# <li>Why does it appear like there are fewer data points for beta = 0? </li>
 # <li>Why is it important that the latent space follows a known distribution?</li>
 # </ul>
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 6</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1405,7 +1420,7 @@ plt.show()
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 7</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1430,7 +1445,7 @@ plt.show()
 # In a latent-space with well-separated clusters, each centroid should look like a clean version of the digit.
 
 # %%
-# Uncomment and run if you want to see the latent-space again:
+# Run if you want to see the latent-space again:
 plot_latent_digits(mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
 
 
@@ -1449,7 +1464,7 @@ def gen_mean_numbers(model, mu_mean, title):
     plt.tight_layout()
 
 
-# gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
+gen_mean_numbers(model0, mu_mean0, title="Model 0") # model with beta = 0
 gen_mean_numbers(model1, mu_mean1, title="Model 1") # model with beta >> 0
 
 # %% [markdown]
@@ -1571,7 +1586,7 @@ def decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbl
 decode_point(z, model0, model1, mus_model0, lbls0, mu_mean0, mus_model1, lbls1, mu_mean1)
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 8</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
@@ -1697,7 +1712,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint</h2>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 9</h2>
 # Let us know when you've reached this point!
 #
 # At this point we have:
