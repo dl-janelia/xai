@@ -511,6 +511,12 @@ test_vae()
 # measures how much a learned distribution of images in the latent space diverges from a standard normal distribution, i.e. a Normal distribution with mean 0 and std 1.
 # The KL-loss penalizes the latent space distribution for being different from a standard normal.
 
+# %% [markdown]
+#
+#
+# The reconstruction loss
+
+
 # %%
 # The reconstruction loss
 _bce_per_pixel = nn.BCELoss(reduction="none")
@@ -524,18 +530,9 @@ def rec_loss(xx, x):
 #
 # The KL loss
 
-# %% [markdown]
-# <div class="alert alert-block alert-info"><h2>Task – KL loss </h2>
-# Tip: Implement the formula as above. Sum over the latent dimension.  <br>
-# Then compute the mean over the batch dimension to match the reconstruction loss. 
-# </div>
 
-
-# %% tags=["task"]
-def kl_loss(mu, logvar):
-    return ...
-
-# %% tags=["solution"]
+# %% 
+# The KL loss 
 def kl_loss(mu, logvar):
     # sum over latent dimensions, mean over batch
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1))
