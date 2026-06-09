@@ -48,4 +48,4 @@ Next, open the exercise notebook!
 This notebook was written by Diane Adjavon, Maria Theiss and Anna Foix-Romero with input from
 Alex Hillsley, Ed Hirata, Larissa Heinrich, Morgan Schwartz, Ben Salmon, Albert Dominguez, Talley Lambert and Eva de la Serna.
 Part B was inspired by a previous version written by Jan Funke and modified by Tri Nguyen, using code from Nils Eckstein.
-Part A has been inspired by multiple discussions between Virginie Uhlhmann, Alex Krull, Martin Weigert, Albert Dominguez, Ed Hirata and Anna Foix Romero.
+Part A has been inspired by multiple discussions between Virginie Uhlmann, Alex Krull, Martin Weigert, Albert Dominguez, Ed Hirata and Anna Foix Romero.
